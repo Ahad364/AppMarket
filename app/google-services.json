@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "132071590440",
+    "firebase_url": "https://android-app-store-3718d-default-rtdb.firebaseio.com",
+    "project_id": "android-app-store-3718d",
+    "storage_bucket": "android-app-store-3718d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:132071590440:android:7ade677a7f0f4dca4e031d",
+        "android_client_info": {
+          "package_name": "com.appmarket.store"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "132071590440-aktjsubd4q7ej2ssrpknrusu951evm7j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1mosnEmCAhO1n_7DmKpOCSLVLmlml_24"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "132071590440-aktjsubd4q7ej2ssrpknrusu951evm7j.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
