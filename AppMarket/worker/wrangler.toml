@@ -1,0 +1,12 @@
+name = "appmarket-download"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# R2 bucket binding (bucket created in the Cloudflare dashboard)
+[[r2_buckets]]
+binding = "APK_BUCKET"
+bucket_name = "appmarket-apks"
+
+# Set the secret (do NOT put it in this file):
+#   Dashboard → Worker → Settings → Variables and Secrets → Add → Secret
+#   Name: FIREBASE_API_KEY   Value: the current_key from google-services.json

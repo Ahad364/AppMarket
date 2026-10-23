@@ -1,0 +1,35 @@
+{
+  "rules": {
+    "apps": {
+      ".read": "auth != null",
+      ".indexOn": ["nameLower", "ratingCount"],
+      "$appId": {
+        ".write": false,
+        "ratingSum": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "ratingCount": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
+      }
+    },
+    "reviews": {
+      "$appId": {
+        ".read": "auth != null",
+        ".indexOn": ["createdAt"],
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['uid', 'rating', 'createdAt']) && newData.child('uid').val() === auth.uid && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && (!newData.child('text').exists() || (newData.child('text').isString() && newData.child('text').val().length <= 500))"
+        }
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}
