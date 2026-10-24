@@ -160,7 +160,7 @@ class AdminHomeViewModel @Inject constructor(
         }
     }
 
-    fun uploadApk(app: AdminApp, uri: Uri, versionName: String, versionCode: Int) {
+    fun uploadApk(app: AdminApp, uri: Uri, versionName: String, versionCode: Int, notify: Boolean) {
         _state.value = _state.value.copy(uploading = true, uploadProgress = 0f, error = null, notice = null)
         viewModelScope.launch {
             try {
@@ -168,10 +168,22 @@ class AdminHomeViewModel @Inject constructor(
                     _state.value = _state.value.copy(uploadProgress = p)
                 }
                 repo.updateApkInfo(app.id, result.apkPath, result.sizeBytes, versionName, versionCode)
-                _state.value = _state.value.copy(
-                    uploading = false,
-                    notice = "\"${app.name}\" এর APK আপলোড হয়েছে"
-                )
+
+                // Only a higher version number triggers the "update" notification.
+                var message = "\"${app.name}\" এর APK আপলোড হয়েছে"
+                if (notify && versionCode > app.versionCode) {
+                    _state.value = _state.value.copy(uploadProgress = 1f)
+                    try {
+                        notifier.sendToAllUsers(
+                            title = "আপডেট: ${app.name}".take(65),
+                            body = "নতুন ভার্সন $versionName এখন পাওয়া যাচ্ছে".take(240)
+                        )
+                        message += ", নোটিফিকেশন পাঠানো হয়েছে"
+                    } catch (e: Exception) {
+                        message += ", কিন্তু নোটিফিকেশন যায়নি: ${e.message}"
+                    }
+                }
+                _state.value = _state.value.copy(uploading = false, notice = message)
                 refresh()
             } catch (e: Exception) {
                 _state.value = _state.value.copy(

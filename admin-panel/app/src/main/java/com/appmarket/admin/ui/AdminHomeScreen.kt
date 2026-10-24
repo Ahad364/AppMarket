@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -261,8 +262,8 @@ fun AdminHomeScreen(
         UploadApkDialog(
             app = app,
             onDismiss = { pendingUpload = null },
-            onConfirm = { versionName, versionCode ->
-                vm.uploadApk(app, uri, versionName, versionCode)
+            onConfirm = { versionName, versionCode, notify ->
+                vm.uploadApk(app, uri, versionName, versionCode, notify)
                 pendingUpload = null
             }
         )
@@ -348,10 +349,11 @@ private fun NotifyDialog(onDismiss: () -> Unit, onSend: (String, String) -> Unit
 private fun UploadApkDialog(
     app: AdminApp,
     onDismiss: () -> Unit,
-    onConfirm: (String, Int) -> Unit
+    onConfirm: (String, Int, Boolean) -> Unit
 ) {
     var versionName by remember(app.id) { mutableStateOf(app.versionName) }
     var versionCodeText by remember(app.id) { mutableStateOf(app.versionCode.toString()) }
+    var notify by remember(app.id) { mutableStateOf(true) }
 
     val versionCode = versionCodeText.toIntOrNull()
     val valid = versionName.isNotBlank() && versionCode != null && versionCode > 0
@@ -371,6 +373,10 @@ private fun UploadApkDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = notify, onCheckedChange = { notify = it })
+                    Text("নতুন ভার্সনের নোটিফিকেশন পাঠান", style = MaterialTheme.typography.bodyMedium)
+                }
                 OutlinedTextField(
                     value = versionName,
                     onValueChange = { versionName = it },
@@ -391,7 +397,7 @@ private fun UploadApkDialog(
         confirmButton = {
             TextButton(
                 enabled = valid,
-                onClick = { onConfirm(versionName.trim(), versionCode ?: 0) }
+                onClick = { onConfirm(versionName.trim(), versionCode ?: 0, notify) }
             ) { Text("আপলোড") }
         },
         dismissButton = {
