@@ -151,13 +151,15 @@ class StoreRepository @Inject constructor(
 
         val previous: Long? = reviewRef.child("rating").get().await().getValue(Long::class.java)
 
-        appRef.runTransactionAwait { data ->
-            val sum = data.child("ratingSum").getValue(Long::class.java) ?: 0L
-            val count = data.child("ratingCount").getValue(Long::class.java) ?: 0L
-            val newSum = if (previous == null) sum + rating else sum - previous + rating
-            val newCount = if (previous == null) count + 1 else count
-            data.child("ratingSum").value = newSum
-            data.child("ratingCount").value = newCount
+        // Rules allow writes only to the ratingSum / ratingCount children, so transact on each child.
+        val sumDelta: Long = if (previous == null) rating.toLong() else rating.toLong() - previous
+        val countDelta: Long = if (previous == null) 1L else 0L
+
+        appRef.child("ratingSum").runTransactionAwait { data ->
+            data.value = (data.getValue(Long::class.java) ?: 0L) + sumDelta
+        }
+        appRef.child("ratingCount").runTransactionAwait { data ->
+            data.value = (data.getValue(Long::class.java) ?: 0L) + countDelta
         }
 
         reviewRef.setValue(
