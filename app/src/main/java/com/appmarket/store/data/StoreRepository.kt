@@ -2,6 +2,7 @@ package com.appmarket.store.data
 
 import android.content.Context
 import com.appmarket.store.BuildConfig
+import com.appmarket.store.model.AdminUser
 import com.appmarket.store.model.AppItem
 import com.appmarket.store.model.Review
 import com.appmarket.store.model.UserProfile
@@ -57,6 +58,7 @@ class StoreRepository @Inject constructor(
 
     suspend fun signIn(email: String, password: String) {
         auth.signInWithEmailAndPassword(email, password).await()
+        ensureNotBanned()
         saveProfile()
     }
 
@@ -68,10 +70,124 @@ class StoreRepository @Inject constructor(
 
     suspend fun signInWithGoogle(idToken: String) {
         auth.signInWithCredential(GoogleAuthProvider.getCredential(idToken, null)).await()
+        ensureNotBanned()
         saveProfile()
     }
 
     fun signOut() = auth.signOut()
+
+    val currentUid: String? get() = auth.currentUser?.uid
+
+    // ---------- Installed apps & updates ----------
+
+    /** versionCode of this package on the device, or null when it is not installed. */
+    fun installedVersionCode(packageName: String): Long? = try {
+        context.packageManager.getPackageInfo(packageName, 0).longVersionCode
+    } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+        null
+    }
+
+    fun updateAvailable(app: AppItem): Boolean {
+        val installed = installedVersionCode(app.packageName) ?: return false
+        return installed < app.versionCode
+    }
+
+    // ---------- Favorites ----------
+
+    /** Emits the app ids the current user has favorited; updates live. */
+    fun favoritesFlow(): Flow<Set<String>> = callbackFlow {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            trySend(emptySet())
+            awaitClose { }
+            return@callbackFlow
+        }
+        val ref = root.child("users").child(uid).child("favorites")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                trySend(snapshot.children.mapNotNull { it.key }.toSet())
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }
+
+    suspend fun setFavorite(appId: String, on: Boolean) {
+        val uid = auth.currentUser?.uid ?: throw IllegalStateException("Login required")
+        val ref = root.child("users").child(uid).child("favorites").child(appId)
+        if (on) ref.setValue(true).await() else ref.removeValue().await()
+    }
+
+    // ---------- Admin & moderation ----------
+
+    /** Reads admins/{uid}. The database rules are the real gate; this only controls the UI. */
+    suspend fun isAdmin(): Boolean {
+        val uid = auth.currentUser?.uid ?: return false
+        return root.child("admins").child(uid).get().await().getValue(Boolean::class.java) == true
+    }
+
+    suspend fun isBanned(): Boolean {
+        val uid = auth.currentUser?.uid ?: return false
+        return root.child("bans").child(uid).get().await().getValue(Boolean::class.java) == true
+    }
+
+    private suspend fun ensureNotBanned() {
+        if (isBanned()) {
+            auth.signOut()
+            throw IllegalStateException("আপনার অ্যাকাউন্ট নিষিদ্ধ করা হয়েছে।")
+        }
+    }
+
+    suspend fun listUsers(): List<AdminUser> {
+        val usersSnap = root.child("users").get().await()
+        val bansSnap = root.child("bans").get().await()
+        return usersSnap.children.map { u ->
+            val uid = u.key.orEmpty()
+            AdminUser(
+                uid = uid,
+                name = u.child("name").getValue(String::class.java).orEmpty(),
+                email = u.child("email").getValue(String::class.java).orEmpty(),
+                banned = bansSnap.child(uid).getValue(Boolean::class.java) == true
+            )
+        }.sortedBy { it.name.lowercase() }
+    }
+
+    /** Every app, including hidden ones. Admin only. */
+    suspend fun listAllAppsForAdmin(): List<AppItem> =
+        apps.get().await().children.mapNotNull { it.toAppItem() }.sortedBy { it.name.lowercase() }
+
+    suspend fun setAppApproved(appId: String, approved: Boolean) {
+        apps.child(appId).child("approved").setValue(approved).await()
+    }
+
+    /** Admin only: removes the app and all of its reviews. */
+    suspend fun deleteApp(appId: String) {
+        root.child("reviews").child(appId).removeValue().await()
+        apps.child(appId).removeValue().await()
+    }
+
+    suspend fun setBanned(uid: String, banned: Boolean) {
+        val ref = root.child("bans").child(uid)
+        if (banned) ref.setValue(true).await() else ref.removeValue().await()
+    }
+
+    /** Removes a review and takes its rating out of the app totals. */
+    suspend fun deleteReview(appId: String, reviewUid: String) {
+        val reviewRef = root.child("reviews").child(appId).child(reviewUid)
+        val rating = reviewRef.child("rating").get().await().getValue(Long::class.java) ?: return
+        val appRef = apps.child(appId)
+        appRef.child("ratingSum").runTransactionAwait { data ->
+            data.value = ((data.getValue(Long::class.java) ?: 0L) - rating).coerceAtLeast(0L)
+        }
+        appRef.child("ratingCount").runTransactionAwait { data ->
+            data.value = ((data.getValue(Long::class.java) ?: 0L) - 1L).coerceAtLeast(0L)
+        }
+        reviewRef.removeValue().await()
+    }
 
     suspend fun currentProfile(): UserProfile? {
         val user = auth.currentUser ?: return null
@@ -95,9 +211,10 @@ class StoreRepository @Inject constructor(
 
     // ---------- Catalogue: listing & search ----------
 
-    suspend fun listApps(category: String? = null): List<AppItem> {
-        val snap = apps.orderByChild("ratingCount").limitToLast(100).get().await()
+    suspend fun listApps(category: String? = null, limit: Int = 100): List<AppItem> {
+        val snap = apps.orderByChild("ratingCount").limitToLast(limit).get().await()
         return snap.children.mapNotNull { it.toAppItem() }
+            .filter { it.approved }
             .filter { category == null || it.category == category }
             .sortedByDescending { it.ratingCount }
     }
@@ -111,7 +228,7 @@ class StoreRepository @Inject constructor(
             .endAt(q + "")
             .limitToFirst(30)
             .get().await()
-        return snap.children.mapNotNull { it.toAppItem() }
+        return snap.children.mapNotNull { it.toAppItem() }.filter { it.approved }
     }
 
     suspend fun getApp(appId: String): AppItem? =
@@ -262,7 +379,8 @@ class StoreRepository @Inject constructor(
             apkPath = str("apkPath"),
             sizeBytes = num("sizeBytes"),
             ratingSum = num("ratingSum"),
-            ratingCount = num("ratingCount")
+            ratingCount = num("ratingCount"),
+            approved = child("approved").getValue(Boolean::class.java) != false
         )
     }
 

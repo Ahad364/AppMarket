@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,8 +28,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
-fun ProfileScreen(onBack: () -> Unit, onSignedOut: () -> Unit, vm: ProfileViewModel = hiltViewModel()) {
+fun ProfileScreen(
+    onBack: () -> Unit,
+    onOpenAdmin: () -> Unit,
+    onOpenMyApps: () -> Unit,
+    onSignedOut: () -> Unit,
+    vm: ProfileViewModel = hiltViewModel()
+) {
     val profile by vm.profile.collectAsStateCompat()
+    val isAdmin by vm.isAdmin.collectAsStateCompat()
+    val isDark by vm.isDark.collectAsStateCompat()
     val name = profile?.name.orEmpty()
     val email = profile?.email.orEmpty()
 
@@ -91,7 +101,36 @@ fun ProfileScreen(onBack: () -> Unit, onSignedOut: () -> Unit, vm: ProfileViewMo
             )
         }
 
+        MarketCard {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "ডার্ক মোড",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(checked = isDark, onCheckedChange = vm::setDark)
+            }
+        }
+
         Spacer(Modifier.weight(1f))
+
+        OutlinedButton(
+            onClick = onOpenMyApps,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) { Text("আমার অ্যাপ", style = MaterialTheme.typography.labelLarge) }
+
+        if (isAdmin) {
+            OutlinedButton(
+                onClick = onOpenAdmin,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) { Text("অ্যাডমিন প্যানেল", style = MaterialTheme.typography.labelLarge) }
+        }
 
         OutlinedButton(
             onClick = {

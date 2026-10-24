@@ -77,9 +77,9 @@ private val AppShapes = Shapes(
 )
 
 @Composable
-fun MarketTheme(content: @Composable () -> Unit) {
+fun MarketTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = AppTypography,
         shapes = AppShapes,
         content = content

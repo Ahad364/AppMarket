@@ -1,31 +1,46 @@
 {
   "rules": {
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": false
+      }
+    },
+    "bans": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+      }
+    },
     "apps": {
-      ".read": "auth != null",
+      ".read": "auth != null && !(root.child('bans').child(auth.uid).val() === true)",
       ".indexOn": ["nameLower", "ratingCount"],
       "$appId": {
-        ".write": false,
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
         "ratingSum": {
-          ".write": "auth != null",
+          ".write": "auth != null && !(root.child('bans').child(auth.uid).val() === true)",
           ".validate": "newData.isNumber() && newData.val() >= 0"
         },
         "ratingCount": {
-          ".write": "auth != null",
+          ".write": "auth != null && !(root.child('bans').child(auth.uid).val() === true)",
           ".validate": "newData.isNumber() && newData.val() >= 0"
         }
       }
     },
     "reviews": {
       "$appId": {
-        ".read": "auth != null",
+        ".read": "auth != null && !(root.child('bans').child(auth.uid).val() === true)",
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
         ".indexOn": ["createdAt"],
         "$uid": {
-          ".write": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && !(root.child('bans').child(auth.uid).val() === true) && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
           ".validate": "newData.hasChildren(['uid', 'rating', 'createdAt']) && newData.child('uid').val() === auth.uid && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && (!newData.child('text').exists() || (newData.child('text').isString() && newData.child('text').val().length <= 500))"
         }
       }
     },
     "users": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"

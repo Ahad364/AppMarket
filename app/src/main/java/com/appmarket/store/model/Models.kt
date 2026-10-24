@@ -13,7 +13,8 @@ data class AppItem(
     val apkPath: String,          // Firebase Storage path, e.g. "apks/com.example.app-3.apk"
     val sizeBytes: Long,
     val ratingSum: Long,
-    val ratingCount: Long
+    val ratingCount: Long,
+    val approved: Boolean = true   // admins can hide an app; hidden apps are not listed
 ) {
     val averageRating: Float
         get() = if (ratingCount == 0L) 0f else ratingSum.toFloat() / ratingCount
@@ -31,4 +32,11 @@ data class UserProfile(
     val uid: String,
     val name: String,
     val email: String
+)
+
+data class AdminUser(
+    val uid: String,
+    val name: String,
+    val email: String,
+    val banned: Boolean
 )

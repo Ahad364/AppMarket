@@ -1,9 +1,11 @@
 package com.appmarket.store.ui
 
+import android.content.Context
+import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,13 +17,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +52,7 @@ import java.util.Date
 fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
     val state by vm.state.collectAsStateCompat()
     val reviews by vm.reviews.collectAsStateCompat()
+    val isFavorite by vm.isFavorite.collectAsStateCompat()
     val ctx = LocalContext.current
     val app = state.app
 
@@ -74,6 +75,14 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
             return@Column
         }
 
+        val installedVersion = vm.installedVersion(app.packageName)
+        val updateAvail = vm.updateAvailable(app)
+        val idleLabel = when {
+            installedVersion == null -> "ইনস্টল করুন"
+            updateAvail -> "আপডেট করুন"
+            else -> "আবার ইনস্টল করুন"
+        }
+
         MarketCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(url = app.iconUrl, name = app.name, size = 88.dp)
@@ -94,10 +103,45 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
                 }
             }
 
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { vm.toggleFavorite(!isFavorite) },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        if (isFavorite) "★ পছন্দে আছে" else "☆ পছন্দ করুন",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+                OutlinedButton(
+                    onClick = { shareApp(ctx, app.name) },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("শেয়ার করুন", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
             Spacer(Modifier.height(18.dp))
+
+            if (installedVersion != null) {
+                Text(
+                    if (updateAvail) {
+                        "নতুন ভার্সন পাওয়া যাচ্ছে (আপনার ভার্সন: $installedVersion)"
+                    } else {
+                        "এই ডিভাইসে ইনস্টল করা আছে"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (updateAvail) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+            }
 
             InstallSection(
                 state = state.install,
+                idleLabel = idleLabel,
                 onDownload = { vm.download(app) },
                 onInstall = { file ->
                     if (ApkInstaller.canInstallPackages(ctx)) {
@@ -143,16 +187,28 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
         )
         Spacer(Modifier.height(8.dp))
 
-        MarketCard {
-            ReviewForm(
-                error = state.reviewError,
-                saved = state.reviewSaved,
-                onSubmit = { rating, text -> vm.submitReview(rating, text) }
-            )
+        val myReview = reviews.firstOrNull { it.uid == vm.myUid }
+        // key() resets the form when the saved review changes, so the form shows the latest values.
+        key(myReview?.rating, myReview?.text) {
+            MarketCard {
+                ReviewForm(
+                    error = state.reviewError,
+                    saved = state.reviewSaved,
+                    initialRating = myReview?.rating ?: 0,
+                    initialText = myReview?.text ?: "",
+                    onSubmit = { rating, text -> vm.submitReview(rating, text) }
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
-        reviews.forEach { ReviewItem(it) }
+        reviews.forEach { review ->
+            ReviewItem(
+                review = review,
+                canDelete = state.isAdmin || review.uid == vm.myUid,
+                onDelete = { vm.deleteReview(review.uid) }
+            )
+        }
         if (reviews.isEmpty()) {
             Text(
                 "এখনও কোনো রিভিউ নেই।",
@@ -161,6 +217,14 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
             )
         }
     }
+}
+
+private fun shareApp(ctx: Context, name: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, "AppMarket-এ \"$name\" অ্যাপটি দেখুন")
+    }
+    ctx.startActivity(Intent.createChooser(intent, "শেয়ার করুন"))
 }
 
 @Composable
@@ -182,6 +246,7 @@ private fun InfoItem(label: String, value: String) {
 @Composable
 private fun InstallSection(
     state: InstallState,
+    idleLabel: String,
     onDownload: () -> Unit,
     onInstall: (java.io.File) -> Unit
 ) {
@@ -191,7 +256,7 @@ private fun InstallSection(
             onClick = onDownload,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = buttonShape
-        ) { Text("ইনস্টল করুন", style = MaterialTheme.typography.labelLarge) }
+        ) { Text(idleLabel, style = MaterialTheme.typography.labelLarge) }
 
         is InstallState.Downloading -> Column {
             Text(
@@ -229,9 +294,16 @@ private fun InstallSection(
 }
 
 @Composable
-private fun ReviewForm(error: String?, saved: Boolean, onSubmit: (Int, String) -> Unit) {
-    var rating by remember { mutableIntStateOf(0) }
-    var text by remember { mutableStateOf("") }
+private fun ReviewForm(
+    error: String?,
+    saved: Boolean,
+    initialRating: Int,
+    initialText: String,
+    onSubmit: (Int, String) -> Unit
+) {
+    var rating by remember { mutableIntStateOf(initialRating) }
+    var text by remember { mutableStateOf(initialText) }
+    val isUpdate = initialRating > 0
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -253,7 +325,12 @@ private fun ReviewForm(error: String?, saved: Boolean, onSubmit: (Int, String) -
             enabled = rating in 1..5,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(14.dp)
-        ) { Text("রিভিউ জমা দিন", style = MaterialTheme.typography.labelLarge) }
+        ) {
+            Text(
+                if (isUpdate) "রিভিউ আপডেট করুন" else "রিভিউ জমা দিন",
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
         error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
@@ -268,7 +345,7 @@ private fun ReviewForm(error: String?, saved: Boolean, onSubmit: (Int, String) -
 }
 
 @Composable
-private fun ReviewItem(review: Review) {
+private fun ReviewItem(review: Review, canDelete: Boolean, onDelete: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -309,6 +386,15 @@ private fun ReviewItem(review: Review) {
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (canDelete) {
+                TextButton(onClick = onDelete) {
+                    Text(
+                        "মুছুন",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
         }
         if (review.text.isNotBlank()) {
             Spacer(Modifier.height(8.dp))

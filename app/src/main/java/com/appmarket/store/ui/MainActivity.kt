@@ -6,14 +6,15 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.appmarket.store.data.StoreRepository
+import com.appmarket.store.data.ThemePrefs
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -22,6 +23,8 @@ object Routes {
     const val HOME = "home"
     const val DETAIL = "detail/{appId}"
     const val PROFILE = "profile"
+    const val ADMIN = "admin"
+    const val MY_APPS = "myapps"
     fun detail(appId: String) = "detail/$appId"
 }
 
@@ -29,11 +32,13 @@ object Routes {
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var repo: StoreRepository
+    @Inject lateinit var themePrefs: ThemePrefs
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MarketTheme {
+            val dark by themePrefs.isDark.collectAsStateCompat()
+            MarketTheme(darkTheme = dark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MarketNavHost(startSignedIn = repo.isSignedIn)
                 }
@@ -66,9 +71,20 @@ fun MarketNavHost(startSignedIn: Boolean) {
         composable(Routes.PROFILE) {
             ProfileScreen(
                 onBack = { nav.popBackStack() },
+                onOpenAdmin = { nav.navigate(Routes.ADMIN) },
+                onOpenMyApps = { nav.navigate(Routes.MY_APPS) },
                 onSignedOut = {
                     nav.navigate(Routes.AUTH) { popUpTo(0) { inclusive = true } }
                 }
+            )
+        }
+        composable(Routes.ADMIN) {
+            AdminScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.MY_APPS) {
+            MyAppsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenApp = { nav.navigate(Routes.detail(it)) }
             )
         }
     }

@@ -73,7 +73,7 @@ fun MarketCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.(
 }
 
 @Composable
-fun AppCard(app: AppItem, onClick: () -> Unit) {
+fun AppCard(app: AppItem, updateAvailable: Boolean = false, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -104,6 +104,14 @@ fun AppCard(app: AppItem, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 RatingRow(app.averageRating, app.ratingCount)
+                if (updateAvailable) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "আপডেট আছে",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
