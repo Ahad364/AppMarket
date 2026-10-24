@@ -62,6 +62,9 @@ class AdminRepository @Inject constructor(
                 packageName = a.child("packageName").getValue(String::class.java).orEmpty(),
                 versionName = a.child("versionName").getValue(String::class.java).orEmpty(),
                 iconUrl = a.child("iconUrl").getValue(String::class.java).orEmpty(),
+                versionCode = a.child("versionCode").getValue(Long::class.java)?.toInt() ?: 0,
+                description = a.child("description").getValue(String::class.java).orEmpty(),
+                category = a.child("category").getValue(String::class.java).orEmpty(),
                 approved = a.child("approved").getValue(Boolean::class.java) != false
             )
         }.sortedBy { it.name.lowercase() }
@@ -70,6 +73,27 @@ class AdminRepository @Inject constructor(
     suspend fun setBanned(uid: String, banned: Boolean) {
         val ref = root.child("bans").child(uid)
         if (banned) ref.setValue(true).await() else ref.removeValue().await()
+    }
+
+    /** Edits app details. The rules allow this only for admins. nameLower is kept in sync for search. */
+    suspend fun updateApp(
+        appId: String,
+        name: String,
+        description: String,
+        category: String,
+        versionName: String,
+        versionCode: Int
+    ) {
+        root.child("apps").child(appId).updateChildren(
+            mapOf(
+                "name" to name,
+                "nameLower" to name.lowercase(),
+                "description" to description,
+                "category" to category,
+                "versionName" to versionName,
+                "versionCode" to versionCode
+            )
+        ).await()
     }
 
     suspend fun setApproved(appId: String, approved: Boolean) {

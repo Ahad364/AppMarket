@@ -1,5 +1,6 @@
 package com.appmarket.admin.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,9 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -21,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,18 +36,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.appmarket.admin.model.AdminApp
 import com.appmarket.admin.model.AdminUser
 
+private val APP_CATEGORIES = listOf("Productivity", "Games", "Social", "Tools", "Education")
+
 @Composable
 fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewModel()) {
     val state by vm.state.collectAsStateCompat()
     var pendingDelete by remember { mutableStateOf<AdminApp?>(null) }
+    var editing by remember { mutableStateOf<AdminApp?>(null) }
 
     LaunchedEffect(state.signedOut) {
         if (state.signedOut) onSignedOut()
+    }
+
+    // Search by name or email, optionally only banned users.
+    val query = state.userQuery.trim().lowercase()
+    val visibleUsers = state.users.filter { user ->
+        (!state.bannedOnly || user.banned) &&
+            (query.isEmpty() || user.name.lowercase().contains(query) || user.email.lowercase().contains(query))
     }
 
     Column(
@@ -100,6 +116,25 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
         }
         Spacer(Modifier.height(12.dp))
 
+        if (state.tab == 0) {
+            OutlinedTextField(
+                value = state.userQuery,
+                onValueChange = vm::onUserQuery,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                placeholder = { Text("নাম বা ইমেইল দিয়ে খুঁজুন") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) }
+            )
+            Spacer(Modifier.height(8.dp))
+            FilterChip(
+                selected = state.bannedOnly,
+                onClick = vm::toggleBannedOnly,
+                label = { Text("শুধু নিষিদ্ধ") }
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+
         state.error?.let {
             Text(
                 it,
@@ -116,11 +151,11 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
             ) {
                 CircularProgressIndicator()
             }
-            state.tab == 0 -> if (state.users.isEmpty()) {
-                EmptyText("কোনো ব্যবহারকারী পাওয়া যায়নি।")
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(state.users, key = { it.uid }) { user ->
+            state.tab == 0 -> when {
+                state.users.isEmpty() -> EmptyText("কোনো ব্যবহারকারী পাওয়া যায়নি।")
+                visibleUsers.isEmpty() -> EmptyText("কোনো ব্যবহারকারী মিলছে না।")
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(visibleUsers, key = { it.uid }) { user ->
                         UserRow(
                             user = user,
                             isSelf = user.uid == state.currentUid,
@@ -136,6 +171,7 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
                     items(state.apps, key = { it.id }) { app ->
                         AppRow(
                             app = app,
+                            onEdit = { editing = app },
                             onToggleVisible = { vm.setApproved(app.id, !app.approved) },
                             onDelete = { pendingDelete = app }
                         )
@@ -143,6 +179,17 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
                 }
             }
         }
+    }
+
+    editing?.let { app ->
+        EditAppDialog(
+            app = app,
+            onDismiss = { editing = null },
+            onSave = { name, description, category, versionName, versionCode ->
+                vm.updateApp(app, name, description, category, versionName, versionCode)
+                editing = null
+            }
+        )
     }
 
     pendingDelete?.let { app ->
@@ -165,6 +212,88 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
             }
         )
     }
+}
+
+@Composable
+private fun EditAppDialog(
+    app: AdminApp,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, String, Int) -> Unit
+) {
+    var name by remember(app.id) { mutableStateOf(app.name) }
+    var description by remember(app.id) { mutableStateOf(app.description) }
+    var category by remember(app.id) { mutableStateOf(app.category) }
+    var versionName by remember(app.id) { mutableStateOf(app.versionName) }
+    var versionCodeText by remember(app.id) { mutableStateOf(app.versionCode.toString()) }
+
+    val versionCode = versionCodeText.toIntOrNull()
+    val valid = name.isNotBlank() && versionName.isNotBlank() && versionCode != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("অ্যাপ এডিট") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("নাম") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("বিবরণ") },
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "ক্যাটাগরি",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    APP_CATEGORIES.forEach { c ->
+                        FilterChip(
+                            selected = category == c,
+                            onClick = { category = c },
+                            label = { Text(c) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = versionName,
+                    onValueChange = { versionName = it },
+                    label = { Text("ভার্সন নাম (যেমন 1.2.0)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = versionCodeText,
+                    onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("ভার্সন কোড (সংখ্যা)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = {
+                    onSave(name.trim(), description.trim(), category, versionName.trim(), versionCode ?: 0)
+                }
+            ) { Text("সংরক্ষণ") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("বাতিল") }
+        }
+    )
 }
 
 @Composable
@@ -234,11 +363,15 @@ private fun UserRow(user: AdminUser, isSelf: Boolean, onToggleBan: () -> Unit) {
 }
 
 @Composable
-private fun AppRow(app: AdminApp, onToggleVisible: () -> Unit, onDelete: () -> Unit) {
+private fun AppRow(
+    app: AdminApp,
+    onEdit: () -> Unit,
+    onToggleVisible: () -> Unit,
+    onDelete: () -> Unit
+) {
     AdminCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppIconBox(url = app.iconUrl, size = 48.dp)
-            Spacer(Modifier.height(0.dp))
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(
                     app.name,
@@ -258,7 +391,12 @@ private fun AppRow(app: AdminApp, onToggleVisible: () -> Unit, onDelete: () -> U
             }
         }
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+                onClick = onEdit,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("এডিট", style = MaterialTheme.typography.labelLarge) }
             OutlinedButton(
                 onClick = onToggleVisible,
                 modifier = Modifier.weight(1f),

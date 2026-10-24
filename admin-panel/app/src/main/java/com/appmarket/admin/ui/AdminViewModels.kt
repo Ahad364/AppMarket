@@ -47,7 +47,9 @@ data class HomeState(
     val loading: Boolean = true,
     val error: String? = null,
     val currentUid: String? = null,
-    val signedOut: Boolean = false
+    val signedOut: Boolean = false,
+    val userQuery: String = "",
+    val bannedOnly: Boolean = false
 )
 
 @HiltViewModel
@@ -115,6 +117,32 @@ class AdminHomeViewModel @Inject constructor(private val repo: AdminRepository) 
         viewModelScope.launch {
             try {
                 repo.deleteApp(appId)
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun onUserQuery(query: String) {
+        _state.value = _state.value.copy(userQuery = query)
+    }
+
+    fun toggleBannedOnly() {
+        _state.value = _state.value.copy(bannedOnly = !_state.value.bannedOnly)
+    }
+
+    fun updateApp(
+        app: AdminApp,
+        name: String,
+        description: String,
+        category: String,
+        versionName: String,
+        versionCode: Int
+    ) {
+        viewModelScope.launch {
+            try {
+                repo.updateApp(app.id, name, description, category, versionName, versionCode)
                 refresh()
             } catch (e: Exception) {
                 _state.value = _state.value.copy(error = e.message)
