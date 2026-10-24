@@ -24,6 +24,9 @@ export default {
     if (request.method === "POST" && url.pathname === "/upload-apk") {
       return handleUploadApk(request, env);
     }
+    if (request.method === "POST" && url.pathname === "/upload-icon") {
+      return handleUploadIcon(request, env, url.origin);
+    }
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405 });
@@ -120,6 +123,56 @@ async function handleUploadApk(request, env) {
   });
 
   return json({ ok: true, apkPath: key, sizeBytes: bytes.length }, 200);
+}
+
+// ---------- Icon upload (admin only) ----------
+
+const MAX_ICON_BYTES = 2 * 1024 * 1024;
+
+async function handleUploadIcon(request, env, origin) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+
+  const pkg = (request.headers.get("X-Package-Name") || "").trim();
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)) {
+    return json({ error: "invalid package name" }, 400);
+  }
+
+  const declared = Number(request.headers.get("content-length") || "0");
+  if (declared > MAX_ICON_BYTES) {
+    return json({ error: "icon is larger than 2 MB" }, 413);
+  }
+
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > MAX_ICON_BYTES) {
+    return json({ error: "icon is empty or larger than 2 MB" }, 413);
+  }
+
+  // Check the file signature, not the header the client sent.
+  let ext;
+  let type;
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    ext = "png"; type = "image/png";
+  } else if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    ext = "jpg"; type = "image/jpeg";
+  } else if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    ext = "webp"; type = "image/webp";
+  } else {
+    return json({ error: "icon must be PNG, JPEG or WebP" }, 400);
+  }
+
+  // Remove older icons with a different extension so only one remains per app.
+  for (const other of ["png", "jpg", "webp"]) {
+    if (other !== ext) await env.APK_BUCKET.delete(`${ICON_PREFIX}${pkg}.${other}`);
+  }
+
+  const key = `${ICON_PREFIX}${pkg}.${ext}`;
+  await env.APK_BUCKET.put(key, bytes, { httpMetadata: { contentType: type } });
+
+  return json({ ok: true, iconUrl: `${origin}/${key}` }, 200);
 }
 
 // ---------- Notifications (admin only) ----------

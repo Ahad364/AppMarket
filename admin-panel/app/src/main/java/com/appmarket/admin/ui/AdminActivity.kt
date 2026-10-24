@@ -16,6 +16,7 @@ import javax.inject.Inject
 
 private const val ROUTE_LOGIN = "login"
 private const val ROUTE_HOME = "home"
+private const val ROUTE_NEW_APP = "newapp"
 
 @AndroidEntryPoint
 class AdminActivity : ComponentActivity() {
@@ -47,9 +48,18 @@ fun AdminNavHost(startSignedIn: Boolean) {
             })
         }
         composable(ROUTE_HOME) {
-            AdminHomeScreen(onSignedOut = {
-                nav.navigate(ROUTE_LOGIN) { popUpTo(0) { inclusive = true } }
-            })
+            AdminHomeScreen(
+                onSignedOut = {
+                    nav.navigate(ROUTE_LOGIN) { popUpTo(0) { inclusive = true } }
+                },
+                onAddApp = { nav.navigate(ROUTE_NEW_APP) }
+            )
+        }
+        composable(ROUTE_NEW_APP) {
+            NewAppScreen(
+                onBack = { nav.popBackStack() },
+                onDone = { nav.popBackStack() }
+            )
         }
     }
 }

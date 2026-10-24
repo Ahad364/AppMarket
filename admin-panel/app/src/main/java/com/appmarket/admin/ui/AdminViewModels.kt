@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appmarket.admin.data.AdminRepository
 import com.appmarket.admin.data.ApkUploader
+import com.appmarket.admin.data.NotificationSender
 import com.appmarket.admin.model.AdminApp
 import com.appmarket.admin.model.AdminUser
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,7 +61,8 @@ data class HomeState(
 @HiltViewModel
 class AdminHomeViewModel @Inject constructor(
     private val repo: AdminRepository,
-    private val uploader: ApkUploader
+    private val uploader: ApkUploader,
+    private val notifier: NotificationSender
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
@@ -176,6 +178,18 @@ class AdminHomeViewModel @Inject constructor(
                     uploading = false,
                     error = e.message ?: "আপলোড ব্যর্থ হয়েছে"
                 )
+            }
+        }
+    }
+
+    fun sendNotification(title: String, body: String) {
+        _state.value = _state.value.copy(error = null, notice = null)
+        viewModelScope.launch {
+            try {
+                notifier.sendToAllUsers(title, body)
+                _state.value = _state.value.copy(notice = "নোটিফিকেশন পাঠানো হয়েছে")
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message ?: "নোটিফিকেশন পাঠানো যায়নি")
             }
         }
     }

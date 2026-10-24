@@ -114,6 +114,47 @@ class AdminRepository @Inject constructor(
         ).await()
     }
 
+    /** True when an app with this package name already exists. */
+    suspend fun packageExists(packageName: String): Boolean {
+        val snap = root.child("apps").orderByChild("packageName").equalTo(packageName).get().await()
+        return snap.exists()
+    }
+
+    /** Creates a new approved app record with zero rating and returns its id. */
+    suspend fun createApp(
+        name: String,
+        developer: String,
+        packageName: String,
+        versionName: String,
+        versionCode: Int,
+        description: String,
+        category: String,
+        iconUrl: String,
+        apkPath: String,
+        sizeBytes: Long
+    ): String {
+        val ref = root.child("apps").push()
+        ref.setValue(
+            mapOf(
+                "name" to name,
+                "nameLower" to name.lowercase(),
+                "developer" to developer,
+                "packageName" to packageName,
+                "versionName" to versionName,
+                "versionCode" to versionCode,
+                "description" to description,
+                "category" to category,
+                "iconUrl" to iconUrl,
+                "apkPath" to apkPath,
+                "sizeBytes" to sizeBytes,
+                "ratingSum" to 0L,
+                "ratingCount" to 0L,
+                "approved" to true
+            )
+        ).await()
+        return ref.key.orEmpty()
+    }
+
     suspend fun setApproved(appId: String, approved: Boolean) {
         root.child("apps").child(appId).child("approved").setValue(approved).await()
     }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -51,16 +52,26 @@ private val APP_CATEGORIES = listOf("Productivity", "Games", "Social", "Tools", 
 private val APK_MIME_TYPES = arrayOf("application/vnd.android.package-archive", "application/octet-stream")
 
 @Composable
-fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewModel()) {
+fun AdminHomeScreen(
+    onSignedOut: () -> Unit,
+    onAddApp: () -> Unit = {},
+    vm: AdminHomeViewModel = hiltViewModel()
+) {
     val state by vm.state.collectAsStateCompat()
     var pendingDelete by remember { mutableStateOf<AdminApp?>(null) }
     var editing by remember { mutableStateOf<AdminApp?>(null) }
     var uploadTarget by remember { mutableStateOf<AdminApp?>(null) }
     var pendingUpload by remember { mutableStateOf<Pair<AdminApp, Uri>?>(null) }
+    var notifyOpen by remember { mutableStateOf(false) }
 
     val apkPicker = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         val target = uploadTarget
         if (uri != null && target != null) pendingUpload = target to uri
+    }
+
+    // Reload when coming back from the "new app" screen.
+    LaunchedEffect(Unit) {
+        vm.refresh()
     }
 
     LaunchedEffect(state.signedOut) {
@@ -126,6 +137,20 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
                 onClick = { vm.selectTab(1) },
                 label = { Text("অ্যাপ") }
             )
+        }
+        Spacer(Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onAddApp,
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("নতুন অ্যাপ", style = MaterialTheme.typography.labelLarge) }
+            OutlinedButton(
+                onClick = { notifyOpen = true },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("নোটিফিকেশন", style = MaterialTheme.typography.labelLarge) }
         }
         Spacer(Modifier.height(12.dp))
 
@@ -243,6 +268,16 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
         )
     }
 
+    if (notifyOpen) {
+        NotifyDialog(
+            onDismiss = { notifyOpen = false },
+            onSend = { title, body ->
+                vm.sendNotification(title, body)
+                notifyOpen = false
+            }
+        )
+    }
+
     pendingDelete?.let { app ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
@@ -263,6 +298,50 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
             }
         )
     }
+}
+
+@Composable
+private fun NotifyDialog(onDismiss: () -> Unit, onSend: (String, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var body by remember { mutableStateOf("") }
+
+    val valid = title.isNotBlank() && body.isNotBlank() && title.length <= 65 && body.length <= 240
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("সবাইকে নোটিফিকেশন") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "সব ব্যবহারকারীর ফোনে এই বার্তা যাবে।",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("শিরোনাম (সর্বোচ্চ ৬৫)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    label = { Text("বার্তা (সর্বোচ্চ ২৪০)") },
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onSend(title.trim(), body.trim()) }) {
+                Text("পাঠান")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("বাতিল") }
+        }
+    )
 }
 
 @Composable
