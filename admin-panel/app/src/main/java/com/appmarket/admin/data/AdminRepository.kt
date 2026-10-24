@@ -96,6 +96,24 @@ class AdminRepository @Inject constructor(
         ).await()
     }
 
+    /** Saves the uploaded APK path and the version info the admin entered. */
+    suspend fun updateApkInfo(
+        appId: String,
+        apkPath: String,
+        sizeBytes: Long,
+        versionName: String,
+        versionCode: Int
+    ) {
+        root.child("apps").child(appId).updateChildren(
+            mapOf(
+                "apkPath" to apkPath,
+                "sizeBytes" to sizeBytes,
+                "versionName" to versionName,
+                "versionCode" to versionCode
+            )
+        ).await()
+    }
+
     suspend fun setApproved(appId: String, approved: Boolean) {
         root.child("apps").child(appId).child("approved").setValue(approved).await()
     }

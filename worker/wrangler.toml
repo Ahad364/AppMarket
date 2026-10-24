@@ -7,6 +7,12 @@ compatibility_date = "2025-01-01"
 binding = "APK_BUCKET"
 bucket_name = "appmarket-apks"
 
-# Set the secret (do NOT put it in this file):
+# Not secret. Replace with your Realtime Database URL (shown at the top of the
+# Firebase Console → Realtime Database page), no trailing slash.
+[vars]
+FIREBASE_DB_URL = "https://REPLACE-WITH-YOUR-DB-URL.firebasedatabase.app"
+
+# Secrets (do NOT put these in this file):
 #   Dashboard → Worker → Settings → Variables and Secrets → Add → Secret
-#   Name: FIREBASE_API_KEY   Value: the current_key from google-services.json
+#   FIREBASE_API_KEY     : the current_key from google-services.json
+#   FCM_SERVICE_ACCOUNT  : the full JSON of the service account key file

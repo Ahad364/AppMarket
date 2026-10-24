@@ -17,10 +17,14 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+
+        // Cloudflare Worker base URL (no trailing slash). Used for APK upload.
+        buildConfigField("String", "WORKER_BASE_URL", "\"https://appmarket-download.goldmail6a.workers.dev\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -55,4 +59,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -1,5 +1,7 @@
 package com.appmarket.admin.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,17 +41,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.appmarket.admin.model.AdminApp
 import com.appmarket.admin.model.AdminUser
 
 private val APP_CATEGORIES = listOf("Productivity", "Games", "Social", "Tools", "Education")
 
+private val APK_MIME_TYPES = arrayOf("application/vnd.android.package-archive", "application/octet-stream")
+
 @Composable
 fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewModel()) {
     val state by vm.state.collectAsStateCompat()
     var pendingDelete by remember { mutableStateOf<AdminApp?>(null) }
     var editing by remember { mutableStateOf<AdminApp?>(null) }
+    var uploadTarget by remember { mutableStateOf<AdminApp?>(null) }
+    var pendingUpload by remember { mutableStateOf<Pair<AdminApp, Uri>?>(null) }
+
+    val apkPicker = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        val target = uploadTarget
+        if (uri != null && target != null) pendingUpload = target to uri
+    }
 
     LaunchedEffect(state.signedOut) {
         if (state.signedOut) onSignedOut()
@@ -135,6 +148,28 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
             Spacer(Modifier.height(12.dp))
         }
 
+        if (state.uploading) {
+            LinearProgressIndicator(
+                progress = { state.uploadProgress },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "APK আপলোড হচ্ছে... ${(state.uploadProgress * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        state.notice?.let {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
         state.error?.let {
             Text(
                 it,
@@ -171,7 +206,12 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
                     items(state.apps, key = { it.id }) { app ->
                         AppRow(
                             app = app,
+                            uploading = state.uploading,
                             onEdit = { editing = app },
+                            onUploadApk = {
+                                uploadTarget = app
+                                apkPicker.launch(APK_MIME_TYPES)
+                            },
                             onToggleVisible = { vm.setApproved(app.id, !app.approved) },
                             onDelete = { pendingDelete = app }
                         )
@@ -188,6 +228,17 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
             onSave = { name, description, category, versionName, versionCode ->
                 vm.updateApp(app, name, description, category, versionName, versionCode)
                 editing = null
+            }
+        )
+    }
+
+    pendingUpload?.let { (app, uri) ->
+        UploadApkDialog(
+            app = app,
+            onDismiss = { pendingUpload = null },
+            onConfirm = { versionName, versionCode ->
+                vm.uploadApk(app, uri, versionName, versionCode)
+                pendingUpload = null
             }
         )
     }
@@ -212,6 +263,62 @@ fun AdminHomeScreen(onSignedOut: () -> Unit, vm: AdminHomeViewModel = hiltViewMo
             }
         )
     }
+}
+
+@Composable
+private fun UploadApkDialog(
+    app: AdminApp,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int) -> Unit
+) {
+    var versionName by remember(app.id) { mutableStateOf(app.versionName) }
+    var versionCodeText by remember(app.id) { mutableStateOf(app.versionCode.toString()) }
+
+    val versionCode = versionCodeText.toIntOrNull()
+    val valid = versionName.isNotBlank() && versionCode != null && versionCode > 0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("APK আপলোড") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "\"${app.name}\" (${app.packageName})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "এই ভার্সন তথ্য APK-এর সাথে মিলিয়ে দিন। ভুল হলে ইনস্টল ও আপডেট বার্তা ভুল দেখাবে।",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = versionName,
+                    onValueChange = { versionName = it },
+                    label = { Text("ভার্সন নাম (যেমন 1.2.0)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = versionCodeText,
+                    onValueChange = { versionCodeText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("ভার্সন কোড (সংখ্যা)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = { onConfirm(versionName.trim(), versionCode ?: 0) }
+            ) { Text("আপলোড") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("বাতিল") }
+        }
+    )
 }
 
 @Composable
@@ -365,7 +472,9 @@ private fun UserRow(user: AdminUser, isSelf: Boolean, onToggleBan: () -> Unit) {
 @Composable
 private fun AppRow(
     app: AdminApp,
+    uploading: Boolean,
     onEdit: () -> Unit,
+    onUploadApk: () -> Unit,
     onToggleVisible: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -379,7 +488,7 @@ private fun AppRow(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "${app.packageName} · v${app.versionName}",
+                    "${app.packageName} · v${app.versionName} (${app.versionCode})",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -415,6 +524,15 @@ private fun AppRow(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
+        }
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(
+            onClick = onUploadApk,
+            enabled = !uploading,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("APK আপলোড", style = MaterialTheme.typography.labelLarge)
         }
     }
 }

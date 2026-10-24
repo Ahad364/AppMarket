@@ -1,8 +1,10 @@
 package com.appmarket.admin.ui
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appmarket.admin.data.AdminRepository
+import com.appmarket.admin.data.ApkUploader
 import com.appmarket.admin.model.AdminApp
 import com.appmarket.admin.model.AdminUser
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,11 +51,17 @@ data class HomeState(
     val currentUid: String? = null,
     val signedOut: Boolean = false,
     val userQuery: String = "",
-    val bannedOnly: Boolean = false
+    val bannedOnly: Boolean = false,
+    val uploading: Boolean = false,
+    val uploadProgress: Float = 0f,
+    val notice: String? = null
 )
 
 @HiltViewModel
-class AdminHomeViewModel @Inject constructor(private val repo: AdminRepository) : ViewModel() {
+class AdminHomeViewModel @Inject constructor(
+    private val repo: AdminRepository,
+    private val uploader: ApkUploader
+) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
@@ -146,6 +154,28 @@ class AdminHomeViewModel @Inject constructor(private val repo: AdminRepository) 
                 refresh()
             } catch (e: Exception) {
                 _state.value = _state.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun uploadApk(app: AdminApp, uri: Uri, versionName: String, versionCode: Int) {
+        _state.value = _state.value.copy(uploading = true, uploadProgress = 0f, error = null, notice = null)
+        viewModelScope.launch {
+            try {
+                val result = uploader.upload(uri, app.packageName, versionCode) { p ->
+                    _state.value = _state.value.copy(uploadProgress = p)
+                }
+                repo.updateApkInfo(app.id, result.apkPath, result.sizeBytes, versionName, versionCode)
+                _state.value = _state.value.copy(
+                    uploading = false,
+                    notice = "\"${app.name}\" এর APK আপলোড হয়েছে"
+                )
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    uploading = false,
+                    error = e.message ?: "আপলোড ব্যর্থ হয়েছে"
+                )
             }
         }
     }
