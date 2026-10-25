@@ -8,6 +8,27 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        create("appmarketKey") {
+            // Set by the GitHub workflow. Without it, the normal debug key is used.
+            val ksPath = System.getenv("KEYSTORE_PATH")
+            if (ksPath != null && java.io.File(ksPath).exists()) {
+                storeFile = java.io.File(ksPath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            val ksPath = System.getenv("KEYSTORE_PATH")
+            if (ksPath != null && java.io.File(ksPath).exists()) {
+                signingConfig = signingConfigs.getByName("appmarketKey")
+            }
+        }
+    }
+
     namespace = "com.appmarket.admin"
     compileSdk = 34
 
