@@ -16,9 +16,9 @@ android {
             val ksPath = System.getenv("KEYSTORE_PATH")
             if (ksPath != null && File(ksPath).exists()) {
                 storeFile = File(ksPath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                storePassword = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
                 keyAlias = System.getenv("KEY_ALIAS") ?: "appmarket"
-                keyPassword = System.getenv("KEY_PASSWORD")
+                keyPassword = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: System.getenv("KEYSTORE_PASSWORD")
             }
         }
     }
