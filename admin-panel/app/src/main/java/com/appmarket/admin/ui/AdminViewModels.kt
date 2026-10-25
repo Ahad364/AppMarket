@@ -8,6 +8,7 @@ import com.appmarket.admin.data.ApkUploader
 import com.appmarket.admin.data.IconUploader
 import com.appmarket.admin.data.NotificationSender
 import com.appmarket.admin.model.AdminApp
+import com.appmarket.admin.model.AdminSlider
 import com.appmarket.admin.model.AdminUser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,8 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private const val MAX_SCREENSHOTS = 6
 
 // ---------- Login ----------
 
@@ -58,7 +57,8 @@ data class HomeState(
     val bannedOnly: Boolean = false,
     val uploading: Boolean = false,
     val uploadProgress: Float = 0f,
-    val notice: String? = null
+    val notice: String? = null,
+    val sliders: List<AdminSlider> = emptyList()
 )
 
 @HiltViewModel
@@ -80,59 +80,32 @@ class AdminHomeViewModel @Inject constructor(
         }
     }
 
-    fun addScreenshot(app: AdminApp, uri: Uri) {
-        if (app.screenshots.size >= MAX_SCREENSHOTS) {
-            _state.value = _state.value.copy(error = "একটি অ্যাপে সর্বোচ্চ $MAX_SCREENSHOTS টি স্ক্রিনশট")
-            return
-        }
+    /** Uploads one slider banner. appId may be empty (the slider then opens nothing). */
+    fun addSlider(uri: Uri, appId: String) {
         _state.value = _state.value.copy(uploading = true, uploadProgress = 0f, error = null, notice = null)
         viewModelScope.launch {
             try {
-                val url = iconUploader.uploadScreenshot(uri, app.packageName)
-                repo.setScreenshots(app.id, app.screenshots + url)
-                _state.value = _state.value.copy(uploading = false, notice = "স্ক্রিনশট যোগ হয়েছে")
+                // The same random id names the image file in R2 and the database record.
+                val sliderId = java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+                val url = iconUploader.uploadSlider(uri, sliderId)
+                repo.addSlider(sliderId, url, appId)
+                _state.value = _state.value.copy(uploading = false, notice = "স্লাইডার যোগ হয়েছে")
                 refresh()
             } catch (e: Exception) {
-                _state.value = _state.value.copy(uploading = false, error = e.message ?: "আপলোড ব্যর্থ হয়েছে")
+                _state.value = _state.value.copy(uploading = false, error = e.message ?: "স্লাইডার আপলোড ব্যর্থ")
             }
         }
     }
 
-    fun uploadBanner(app: AdminApp, uri: Uri) {
-        _state.value = _state.value.copy(uploading = true, uploadProgress = 0f, error = null, notice = null)
+    fun deleteSlider(slider: AdminSlider) {
         viewModelScope.launch {
             try {
-                val url = iconUploader.uploadBanner(uri, app.packageName)
-                // A fresh URL each time avoids cached old banners on the phone.
-                repo.setBanner(app.id, "$url?v=${System.currentTimeMillis()}")
-                _state.value = _state.value.copy(uploading = false, notice = "\"${app.name}\" এর ব্যানার সেভ হয়েছে")
+                repo.deleteSlider(slider.id)
+                runCatching { iconUploader.deleteSlider(slider.id) }
+                _state.value = _state.value.copy(notice = "স্লাইডার মুছে ফেলা হয়েছে")
                 refresh()
             } catch (e: Exception) {
-                _state.value = _state.value.copy(uploading = false, error = e.message ?: "ব্যানার আপলোড ব্যর্থ")
-            }
-        }
-    }
-
-    fun deleteBanner(app: AdminApp) {
-        viewModelScope.launch {
-            try {
-                repo.setBanner(app.id, null)
-                runCatching { iconUploader.deleteBanner(app.packageName) }
-                _state.value = _state.value.copy(notice = "ব্যানার মুছে ফেলা হয়েছে")
-                refresh()
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(error = e.message ?: "ব্যানার মোছা যায়নি")
-            }
-        }
-    }
-
-    fun removeScreenshot(app: AdminApp, url: String) {
-        viewModelScope.launch {
-            try {
-                repo.setScreenshots(app.id, app.screenshots - url)
-                refresh()
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(error = e.message)
+                _state.value = _state.value.copy(error = e.message ?: "স্লাইডার মোছা যায়নি")
             }
         }
     }
@@ -161,9 +134,11 @@ class AdminHomeViewModel @Inject constructor(
             try {
                 val users = repo.loadUsers()
                 val apps = repo.loadApps()
+                val sliders = runCatching { repo.loadSliders() }.getOrDefault(_state.value.sliders)
                 _state.value = _state.value.copy(
                     users = users,
                     apps = apps,
+                    sliders = sliders,
                     loading = false,
                     currentUid = repo.currentUid
                 )

@@ -8,6 +8,7 @@ import com.appmarket.store.data.StoreRepository
 import com.appmarket.store.data.ThemePrefs
 import com.appmarket.store.model.AdminUser
 import com.appmarket.store.model.AppItem
+import com.appmarket.store.model.HomeSlider
 import com.appmarket.store.model.Review
 import com.appmarket.store.model.UserProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,6 +58,7 @@ data class HomeUiState(
     val category: String? = null,
     val apps: List<AppItem> = emptyList(),
     val featured: List<AppItem> = emptyList(),
+    val sliders: List<HomeSlider> = emptyList(),
     val limit: Int = PAGE_SIZE,
     val loading: Boolean = false,
     val error: String? = null
@@ -108,7 +110,18 @@ class HomeViewModel @Inject constructor(private val repo: StoreRepository) : Vie
                 } else {
                     emptyList()
                 }
-                _state.value = _state.value.copy(apps = apps, featured = featured, loading = false)
+                // Slider banners also only on the plain home listing.
+                val sliders = if (snapshot.query.isBlank() && snapshot.category == null) {
+                    runCatching { repo.listSliders() }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
+                _state.value = _state.value.copy(
+                    apps = apps,
+                    featured = featured,
+                    sliders = sliders,
+                    loading = false
+                )
             } catch (e: Exception) {
                 _state.value = _state.value.copy(loading = false, error = e.message)
             }

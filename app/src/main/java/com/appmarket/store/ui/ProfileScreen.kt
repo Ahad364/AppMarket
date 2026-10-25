@@ -30,13 +30,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
-    onOpenAdmin: () -> Unit,
     onOpenMyApps: () -> Unit,
     onSignedOut: () -> Unit,
     vm: ProfileViewModel = hiltViewModel()
 ) {
     val profile by vm.profile.collectAsStateCompat()
-    val isAdmin by vm.isAdmin.collectAsStateCompat()
     val isDark by vm.isDark.collectAsStateCompat()
     val name = profile?.name.orEmpty()
     val email = profile?.email.orEmpty()
@@ -123,14 +121,6 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(14.dp)
         ) { Text("আমার অ্যাপ", style = MaterialTheme.typography.labelLarge) }
-
-        if (isAdmin) {
-            OutlinedButton(
-                onClick = onOpenAdmin,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) { Text("অ্যাডমিন প্যানেল", style = MaterialTheme.typography.labelLarge) }
-        }
 
         OutlinedButton(
             onClick = {

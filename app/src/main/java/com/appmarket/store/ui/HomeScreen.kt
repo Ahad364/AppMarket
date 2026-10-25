@@ -13,7 +13,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -22,6 +31,7 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.style.TextOverflow
 import com.appmarket.store.model.AppItem
+import com.appmarket.store.model.HomeSlider
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -43,19 +53,62 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-/** Full-width-style 16:9 banner for a featured app that has a banner image. */
+/** Auto-sliding 16:9 banner slider from the Admin Panel's slider list. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FeaturedBanner(app: AppItem, onClick: () -> Unit) {
-    AsyncImage(
-        model = app.bannerUrl,
-        contentDescription = app.name,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier
-            .width(300.dp)
-            .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-    )
+private fun BannerSlider(slides: List<HomeSlider>, onOpenApp: (String) -> Unit) {
+    val pagerState = rememberPagerState(pageCount = { slides.size })
+
+    LaunchedEffect(slides.size) {
+        if (slides.size > 1) {
+            while (true) {
+                delay(4000)
+                if (!pagerState.isScrollInProgress) {
+                    pagerState.animateScrollToPage((pagerState.currentPage + 1) % slides.size)
+                }
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = pagerState,
+            pageSpacing = 12.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            val slide = slides[page]
+            AsyncImage(
+                model = slide.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(enabled = slide.appId.isNotBlank()) { onOpenApp(slide.appId) }
+            )
+        }
+        if (slides.size > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                slides.indices.forEach { i ->
+                    val active = i == pagerState.currentPage
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(if (active) 8.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (active) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -134,6 +187,11 @@ fun HomeScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        if (state.sliders.isNotEmpty()) {
+            BannerSlider(slides = state.sliders, onOpenApp = onOpenApp)
+            Spacer(Modifier.height(12.dp))
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -159,11 +217,7 @@ fun HomeScreen(
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(state.featured, key = { it.id }) { app ->
-                    if (app.bannerUrl.isNotBlank()) {
-                        FeaturedBanner(app = app, onClick = { onOpenApp(app.id) })
-                    } else {
-                        FeaturedCard(app = app, onClick = { onOpenApp(app.id) })
-                    }
+                    FeaturedCard(app = app, onClick = { onOpenApp(app.id) })
                 }
             }
             Spacer(Modifier.height(16.dp))

@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -36,6 +38,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.appmarket.admin.model.AdminApp
+import com.appmarket.admin.model.AdminSlider
 import com.appmarket.admin.model.AdminUser
 
 private val APP_CATEGORIES = listOf("Productivity", "Games", "Social", "Tools", "Education")
@@ -69,23 +73,14 @@ fun AdminHomeScreen(
     var uploadTarget by remember { mutableStateOf<AdminApp?>(null) }
     var pendingUpload by remember { mutableStateOf<Pair<AdminApp, Uri>?>(null) }
     var notifyOpen by remember { mutableStateOf(false) }
-    var shotsOpen by remember { mutableStateOf<AdminApp?>(null) }
-    var shotTarget by remember { mutableStateOf<AdminApp?>(null) }
-    var bannerOpen by remember { mutableStateOf<AdminApp?>(null) }
-    var bannerTarget by remember { mutableStateOf<AdminApp?>(null) }
+    var sliderOpen by remember { mutableStateOf(false) }
+    // The app chosen in the slider dialog, kept until the image picker returns.
+    var sliderAppId by remember { mutableStateOf("") }
 
-    val bannerPicker = rememberLauncherForActivityResult(
+    val sliderPicker = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        val target = bannerTarget
-        if (uri != null && target != null) vm.uploadBanner(target, uri)
-    }
-
-    val shotPicker = rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        val target = shotTarget
-        if (uri != null && target != null) vm.addScreenshot(target, uri)
+        if (uri != null) vm.addSlider(uri, sliderAppId)
     }
 
     val apkPicker = rememberLauncherForActivityResult(OpenDocument()) { uri ->
@@ -170,6 +165,11 @@ fun AdminHomeScreen(
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) { Text("নতুন অ্যাপ", style = MaterialTheme.typography.labelLarge) }
+            OutlinedButton(
+                onClick = { sliderOpen = true },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("স্লাইডার", style = MaterialTheme.typography.labelLarge) }
             OutlinedButton(
                 onClick = { notifyOpen = true },
                 modifier = Modifier.weight(1f).height(48.dp),
@@ -263,8 +263,6 @@ fun AdminHomeScreen(
                             },
                             featured = app.featured,
                             onToggleFeatured = { vm.toggleFeatured(app) },
-                            onScreenshots = { shotsOpen = app },
-                            onBanner = { bannerOpen = app },
                             onToggleVisible = { vm.setApproved(app.id, !app.approved) },
                             onDelete = { pendingDelete = app }
                         )
@@ -296,30 +294,16 @@ fun AdminHomeScreen(
         )
     }
 
-    bannerOpen?.let { opened ->
-        val live = state.apps.find { it.id == opened.id } ?: opened
-        BannerDialog(
-            app = live,
-            onPick = {
-                bannerTarget = live
-                bannerPicker.launch("image/*")
+    if (sliderOpen) {
+        SliderDialog(
+            sliders = state.sliders,
+            apps = state.apps,
+            onPickImage = { appId ->
+                sliderAppId = appId
+                sliderPicker.launch("image/*")
             },
-            onDelete = { vm.deleteBanner(live) },
-            onDismiss = { bannerOpen = null }
-        )
-    }
-
-    shotsOpen?.let { opened ->
-        // Read the latest copy so the dialog reflects changes right away.
-        val live = state.apps.find { it.id == opened.id } ?: opened
-        ScreenshotDialog(
-            app = live,
-            onAdd = {
-                shotTarget = live
-                shotPicker.launch("image/*")
-            },
-            onRemove = { url -> vm.removeScreenshot(live, url) },
-            onDismiss = { shotsOpen = null }
+            onDelete = { vm.deleteSlider(it) },
+            onDismiss = { sliderOpen = false }
         )
     }
 
@@ -356,107 +340,91 @@ fun AdminHomeScreen(
 }
 
 @Composable
-private fun BannerDialog(
-    app: AdminApp,
-    onPick: () -> Unit,
-    onDelete: () -> Unit,
+private fun SliderDialog(
+    sliders: List<AdminSlider>,
+    apps: List<AdminApp>,
+    onPickImage: (String) -> Unit,
+    onDelete: (AdminSlider) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var selectedAppId by remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ব্যানার: ${app.name}") },
+        title = { Text("স্লাইডার ব্যানার") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Text(
-                    "১৬:৯ অনুপাতের ছবি দিন (যেমন 1280×720)। ৩ MB-এর কম, PNG, JPEG বা WebP। ফিচার্ড অ্যাপের জন্য হোমে এটি দেখাবে।",
+                    "ইউজার অ্যাপের হোমে সার্চ বারের নিচে অটো-স্লাইড হবে। ১৬:৯ ছবি দিন (যেমন 1280×720), ৩ MB-এর কম, PNG, JPEG বা WebP।",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (app.bannerUrl.isBlank()) {
-                    Text(
-                        "এখনও কোনো ব্যানার নেই।",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    AsyncImage(
-                        model = app.bannerUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(12.dp))
-                    )
+
+                Text(
+                    "ছবিতে ট্যাপ করলে যে অ্যাপ খুলবে:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = selectedAppId.isEmpty(), onClick = { selectedAppId = "" })
+                    Text("কোনো অ্যাপ নয়", style = MaterialTheme.typography.bodyMedium)
                 }
-                OutlinedButton(
-                    onClick = onPick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (app.bannerUrl.isBlank()) "ব্যানার আপলোড করুন" else "ব্যানার বদলান")
-                }
-                if (app.bannerUrl.isNotBlank()) {
-                    OutlinedButton(
-                        onClick = onDelete,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("ব্যানার মুছুন", color = MaterialTheme.colorScheme.error)
+                apps.forEach { app ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = selectedAppId == app.id, onClick = { selectedAppId = app.id })
+                        Text(app.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("বন্ধ করুন") }
-        }
-    )
-}
 
-@Composable
-private fun ScreenshotDialog(
-    app: AdminApp,
-    onAdd: () -> Unit,
-    onRemove: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("স্ক্রিনশট: ${app.name}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = { onPickImage(selectedAppId) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("নতুন স্লাইডার ছবি যোগ করুন") }
+
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    "সর্বোচ্চ ৬টি ছবি। ছবি ৩ MB-এর কম হতে হবে (PNG, JPEG বা WebP)।",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "বর্তমান স্লাইডার (${sliders.size})",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                if (app.screenshots.isEmpty()) {
+                if (sliders.isEmpty()) {
                     Text(
-                        "এখনও কোনো স্ক্রিনশট নেই।",
+                        "এখনও কোনো স্লাইডার নেই।",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                app.screenshots.forEach { url ->
+                sliders.forEach { slider ->
+                    val linked = apps.find { it.id == slider.appId }?.name
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AppIconBox(url = url, size = 56.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            "ছবি",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium
+                        AsyncImage(
+                            model = slider.imageUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .width(96.dp)
+                                .aspectRatio(16f / 9f)
+                                .clip(RoundedCornerShape(8.dp))
                         )
-                        TextButton(onClick = { onRemove(url) }) {
+                        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                            Text(
+                                linked ?: "কোনো অ্যাপ নয়",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                        TextButton(onClick = { onDelete(slider) }) {
                             Text("মুছুন", color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
-                OutlinedButton(
-                    onClick = onAdd,
-                    enabled = app.screenshots.size < 6,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("ছবি যোগ করুন") }
             }
         },
         confirmButton = {
@@ -726,8 +694,6 @@ private fun AppRow(
     onEdit: () -> Unit,
     onUploadApk: () -> Unit,
     onToggleFeatured: () -> Unit,
-    onScreenshots: () -> Unit,
-    onBanner: () -> Unit,
     onToggleVisible: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -790,16 +756,6 @@ private fun AppRow(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
-            OutlinedButton(
-                onClick = onBanner,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("ব্যানার", style = MaterialTheme.typography.labelLarge) }
-            OutlinedButton(
-                onClick = onScreenshots,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("স্ক্রিনশট", style = MaterialTheme.typography.labelLarge) }
         }
         Spacer(Modifier.height(6.dp))
         OutlinedButton(

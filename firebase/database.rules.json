@@ -15,7 +15,11 @@
     },
     "apps": {
       ".read": "auth != null && !(root.child('bans').child(auth.uid).val() === true)",
-      ".indexOn": ["nameLower", "ratingCount", "packageName"],
+      ".indexOn": [
+        "nameLower",
+        "ratingCount",
+        "packageName"
+      ],
       "$appId": {
         ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
         "ratingSum": {
@@ -32,7 +36,9 @@
       "$appId": {
         ".read": "auth != null && !(root.child('bans').child(auth.uid).val() === true)",
         ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
-        ".indexOn": ["createdAt"],
+        ".indexOn": [
+          "createdAt"
+        ],
         "$uid": {
           ".write": "auth != null && !(root.child('bans').child(auth.uid).val() === true) && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
           ".validate": "newData.hasChildren(['uid', 'rating', 'createdAt']) && newData.child('uid').val() === auth.uid && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && (!newData.child('text').exists() || (newData.child('text').isString() && newData.child('text').val().length <= 500))"
@@ -49,6 +55,10 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"
       }
+    },
+    "sliders": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
     }
   }
 }

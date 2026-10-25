@@ -17,7 +17,13 @@ data class AdminApp(
     val category: String,
     val iconUrl: String,
     val approved: Boolean,
-    val featured: Boolean = false,
-    val screenshots: List<String> = emptyList(),
-    val bannerUrl: String = ""
+    val featured: Boolean = false
+)
+
+/** A home-screen slider banner. It is not tied to an app; it may open one when tapped. */
+data class AdminSlider(
+    val id: String,
+    val imageUrl: String,
+    val appId: String,
+    val createdAt: Long
 )

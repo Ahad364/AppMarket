@@ -4,6 +4,7 @@ import android.content.Context
 import com.appmarket.store.BuildConfig
 import com.appmarket.store.model.AdminUser
 import com.appmarket.store.model.AppItem
+import com.appmarket.store.model.HomeSlider
 import com.appmarket.store.model.Review
 import com.appmarket.store.model.UserProfile
 import com.google.firebase.auth.FirebaseAuth
@@ -162,6 +163,19 @@ class StoreRepository @Inject constructor(
         if (ids.isEmpty()) return emptyList()
         return apps.get().await().children.mapNotNull { it.toAppItem() }
             .filter { it.id in ids && it.approved }
+    }
+
+    /** Slider banners from the Admin Panel, oldest first. Anyone signed in can read them. */
+    suspend fun listSliders(): List<HomeSlider> {
+        return root.child("sliders").get().await().children.mapNotNull { s ->
+            val imageUrl = s.child("imageUrl").getValue(String::class.java).orEmpty()
+            if (imageUrl.isBlank()) return@mapNotNull null
+            HomeSlider(
+                id = s.key.orEmpty(),
+                imageUrl = imageUrl,
+                appId = s.child("appId").getValue(String::class.java).orEmpty()
+            ) to (s.child("createdAt").getValue(Long::class.java) ?: 0L)
+        }.sortedBy { it.second }.map { it.first }
     }
 
     /** Every app, including hidden ones. Admin only. */

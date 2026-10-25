@@ -22,6 +22,13 @@ data class AppItem(
         get() = if (ratingCount == 0L) 0f else ratingSum.toFloat() / ratingCount
 }
 
+/** One slider banner on the user home screen. appId is empty when the slider opens nothing. */
+data class HomeSlider(
+    val id: String,
+    val imageUrl: String,
+    val appId: String
+)
+
 data class Review(
     val uid: String,
     val userName: String,

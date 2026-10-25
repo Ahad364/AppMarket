@@ -67,9 +67,7 @@ class AdminRepository @Inject constructor(
                 description = a.child("description").getValue(String::class.java).orEmpty(),
                 category = a.child("category").getValue(String::class.java).orEmpty(),
                 approved = a.child("approved").getValue(Boolean::class.java) != false,
-                featured = featuredSnap.child(a.key.orEmpty()).getValue(Boolean::class.java) == true,
-                screenshots = a.child("screenshots").children.mapNotNull { it.getValue(String::class.java) },
-                bannerUrl = a.child("bannerUrl").getValue(String::class.java).orEmpty()
+                featured = featuredSnap.child(a.key.orEmpty()).getValue(Boolean::class.java) == true
             )
         }.sortedBy { it.name.lowercase() }
     }
@@ -165,15 +163,32 @@ class AdminRepository @Inject constructor(
         if (featured) ref.setValue(true).await() else ref.removeValue().await()
     }
 
-    /** Replaces the screenshot URL list. An empty list removes the node. */
-    suspend fun setScreenshots(appId: String, urls: List<String>) {
-        root.child("apps").child(appId).child("screenshots")
-            .setValue(if (urls.isEmpty()) null else urls).await()
+    /** Slider banners, oldest first. */
+    suspend fun loadSliders(): List<AdminSlider> {
+        val snap = root.child("sliders").get().await()
+        return snap.children.map { s ->
+            AdminSlider(
+                id = s.key.orEmpty(),
+                imageUrl = s.child("imageUrl").getValue(String::class.java).orEmpty(),
+                appId = s.child("appId").getValue(String::class.java).orEmpty(),
+                createdAt = s.child("createdAt").getValue(Long::class.java) ?: 0L
+            )
+        }.filter { it.imageUrl.isNotBlank() }.sortedBy { it.createdAt }
     }
 
-    /** Saves the banner URL, or removes it when url is null. */
-    suspend fun setBanner(appId: String, url: String?) {
-        root.child("apps").child(appId).child("bannerUrl").setValue(url).await()
+    /** Saves a slider record under the same id that the Worker used for the image file. */
+    suspend fun addSlider(sliderId: String, imageUrl: String, appId: String) {
+        root.child("sliders").child(sliderId).setValue(
+            mapOf(
+                "imageUrl" to imageUrl,
+                "appId" to appId,
+                "createdAt" to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    suspend fun deleteSlider(sliderId: String) {
+        root.child("sliders").child(sliderId).removeValue().await()
     }
 
     suspend fun setApproved(appId: String, approved: Boolean) {

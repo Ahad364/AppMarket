@@ -118,15 +118,11 @@ fun MarketNavHost(startSignedIn: Boolean) {
         composable(Routes.PROFILE) {
             ProfileScreen(
                 onBack = { nav.popBackStack() },
-                onOpenAdmin = { nav.navigate(Routes.ADMIN) },
                 onOpenMyApps = { nav.navigate(Routes.MY_APPS) },
                 onSignedOut = {
                     nav.navigate(Routes.AUTH) { popUpTo(0) { inclusive = true } }
                 }
             )
-        }
-        composable(Routes.ADMIN) {
-            AdminScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.MY_APPS) {
             MyAppsScreen(

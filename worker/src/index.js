@@ -6,6 +6,9 @@
 // - POST /upload-apk      : admin only. Raw APK bytes. Headers: X-Package-Name, X-Version-Code
 // - POST /upload-icon     : admin only. Raw image bytes. Header: X-Package-Name
 // - POST /upload-screenshot : admin only. Raw image bytes. Headers: X-Package-Name, X-Shot-Id
+// - POST /upload-slider   : admin only. Raw image bytes. Header: X-Slider-Id
+// - POST /delete-slider   : admin only. Header: X-Slider-Id
+// - GET  /sliders/...     : public, cached
 // - POST /notify          : admin only. Body: { "title": "...", "body": "..." }
 
 const APK_PREFIX = "apks/";
@@ -19,6 +22,8 @@ const MAX_ICON_BYTES = 2 * 1024 * 1024;
 const MAX_SHOT_BYTES = 3 * 1024 * 1024;
 const BANNER_PREFIX = "banners/";
 const MAX_BANNER_BYTES = 3 * 1024 * 1024;
+const SLIDER_PREFIX = "sliders/";
+const MAX_SLIDER_BYTES = 3 * 1024 * 1024;
 
 export default {
   async fetch(request, env) {
@@ -42,6 +47,12 @@ export default {
     if (request.method === "POST" && url.pathname === "/upload-screenshot") {
       return handleUploadScreenshot(request, env, url.origin);
     }
+    if (request.method === "POST" && url.pathname === "/upload-slider") {
+      return handleUploadSlider(request, env, url.origin);
+    }
+    if (request.method === "POST" && url.pathname === "/delete-slider") {
+      return handleDeleteSlider(request, env);
+    }
     if (request.method === "GET" && url.pathname.startsWith("/app/")) {
       return appLinkPage(url.pathname.slice("/app/".length));
     }
@@ -55,7 +66,8 @@ export default {
     const isIcon = key.startsWith(ICON_PREFIX);
     const isShot = key.startsWith(SHOT_PREFIX);
     const isBanner = key.startsWith(BANNER_PREFIX);
-    if (!(isApk || isIcon || isShot || isBanner) || key.includes("..")) {
+    const isSlider = key.startsWith(SLIDER_PREFIX);
+    if (!(isApk || isIcon || isShot || isBanner || isSlider) || key.includes("..")) {
       return new Response("Not found", { status: 404 });
     }
 
@@ -287,6 +299,46 @@ async function handleDeleteBanner(request, env) {
 
   for (const ext of ["png", "jpg", "webp"]) {
     await env.APK_BUCKET.delete(`${BANNER_PREFIX}${pkg}.${ext}`);
+  }
+  return json({ ok: true }, 200);
+}
+
+// ---------- Slider banner upload and delete (admin only) ----------
+
+// Slider banners are independent of apps. Each upload gets its own random id, so no file is overwritten.
+async function handleUploadSlider(request, env, origin) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+
+  const sliderId = (request.headers.get("X-Slider-Id") || "").trim();
+  if (!/^[A-Za-z0-9]{1,32}$/.test(sliderId)) return json({ error: "invalid slider id" }, 400);
+
+  const declared = Number(request.headers.get("content-length") || "0");
+  if (declared > MAX_SLIDER_BYTES) return json({ error: "slider image is larger than 3 MB" }, 413);
+
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > MAX_SLIDER_BYTES) {
+    return json({ error: "slider image is empty or larger than 3 MB" }, 413);
+  }
+
+  const img = imageType(bytes);
+  if (!img) return json({ error: "slider image must be PNG, JPEG or WebP" }, 400);
+
+  const key = `${SLIDER_PREFIX}${sliderId}.${img.ext}`;
+  await env.APK_BUCKET.put(key, bytes, { httpMetadata: { contentType: img.type } });
+
+  return json({ ok: true, sliderUrl: `${origin}/${key}` }, 200);
+}
+
+async function handleDeleteSlider(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+
+  const sliderId = (request.headers.get("X-Slider-Id") || "").trim();
+  if (!/^[A-Za-z0-9]{1,32}$/.test(sliderId)) return json({ error: "invalid slider id" }, 400);
+
+  for (const ext of ["png", "jpg", "webp"]) {
+    await env.APK_BUCKET.delete(`${SLIDER_PREFIX}${sliderId}.${ext}`);
   }
   return json({ ok: true }, 200);
 }
