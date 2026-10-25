@@ -11,6 +11,8 @@ import com.appmarket.store.model.AppItem
 import com.appmarket.store.model.HomeSlider
 import com.appmarket.store.model.Review
 import com.appmarket.store.model.UserProfile
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +27,33 @@ import javax.inject.Inject
 
 // ---------- Auth ----------
 
-data class AuthUiState(val loading: Boolean = false, val error: String? = null, val done: Boolean = false)
+data class AuthUiState(
+    val loading: Boolean = false,
+    val error: String? = null,
+    val done: Boolean = false,
+    val notice: String? = null
+)
+
+/** Turns Firebase error text into a short Bangla message the user can act on. */
+private fun friendlyAuthError(e: Exception): String {
+    val msg = (e.message ?: "").lowercase()
+    return when {
+        "network" in msg || "unable to resolve" in msg || "timeout" in msg ->
+            "ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন"
+        "invalid_login_credentials" in msg || "password is invalid" in msg ||
+            "wrong-password" in msg || "invalid-credential" in msg ->
+            "ইমেইল বা পাসওয়ার্ড ভুল"
+        "no user record" in msg || "user-not-found" in msg ->
+            "এই ইমেইলে কোনো অ্যাকাউন্ট নেই"
+        "already in use" in msg || "email-already-in-use" in msg || "email address is already" in msg ->
+            "এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট আছে"
+        "badly formatted" in msg || "invalid-email" in msg ->
+            "ইমেইলটি সঠিক নয়"
+        "too-many-requests" in msg || "too many" in msg ->
+            "অনেকবার চেষ্টা হয়েছে, কিছুক্ষণ পর আবার চেষ্টা করুন"
+        else -> e.message ?: "কিছু একটা ভুল হয়েছে, আবার চেষ্টা করুন"
+    }
+}
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(private val repo: StoreRepository) : ViewModel() {
@@ -36,6 +64,29 @@ class AuthViewModel @Inject constructor(private val repo: StoreRepository) : Vie
     fun signUp(name: String, email: String, password: String) = execute { repo.signUp(name, email, password) }
     fun google(idToken: String) = execute { repo.signInWithGoogle(idToken) }
 
+    /** Clears the last error or notice, e.g. when switching between Log in and Sign up. */
+    fun clearMessages() {
+        _state.value = AuthUiState()
+    }
+
+    /** Sends a password reset email. The user does not need to be signed in. */
+    fun resetPassword(email: String) {
+        val address = email.trim()
+        if (address.isBlank()) {
+            _state.value = AuthUiState(error = "আগে ইমেইল লিখুন")
+            return
+        }
+        _state.value = AuthUiState(loading = true)
+        viewModelScope.launch {
+            _state.value = try {
+                FirebaseAuth.getInstance().sendPasswordResetEmail(address).await()
+                AuthUiState(notice = "রিসেট লিংক $address-এ পাঠানো হয়েছে। ইমেইল চেক করুন।")
+            } catch (e: Exception) {
+                AuthUiState(error = friendlyAuthError(e))
+            }
+        }
+    }
+
     private fun execute(block: suspend () -> Unit) {
         _state.value = AuthUiState(loading = true)
         viewModelScope.launch {
@@ -43,7 +94,7 @@ class AuthViewModel @Inject constructor(private val repo: StoreRepository) : Vie
                 block()
                 AuthUiState(done = true)
             } catch (e: Exception) {
-                AuthUiState(error = e.message ?: "Something went wrong")
+                AuthUiState(error = friendlyAuthError(e))
             }
         }
     }

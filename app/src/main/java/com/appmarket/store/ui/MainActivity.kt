@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
             val dark by themePrefs.isDark.collectAsStateCompat()
             MarketTheme(darkTheme = dark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MarketNavHost(startSignedIn = repo.isSignedIn)
+                    AppRoot(startSignedIn = repo.isSignedIn)
                 }
             }
         }
