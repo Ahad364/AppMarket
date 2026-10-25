@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome status-bar icon: Android tints it, so only the shape matters. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M9,8V6a3,3 0 0 1 6,0V8H17L19,21H5L7,8ZM11,6V8H13V6a1,1 0 0 0 -2,0Z
+            M10,11L16,14.5L10,18Z" />
+</vector>
