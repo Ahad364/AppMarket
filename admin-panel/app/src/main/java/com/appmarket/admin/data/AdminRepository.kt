@@ -1,6 +1,7 @@
 package com.appmarket.admin.data
 
 import com.appmarket.admin.model.AdminApp
+import com.appmarket.admin.model.AdminSlider
 import com.appmarket.admin.model.AdminUser
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
