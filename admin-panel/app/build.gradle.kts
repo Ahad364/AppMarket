@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +14,8 @@ android {
         create("appmarketKey") {
             // Set by the GitHub workflow. Without it, the normal debug key is used.
             val ksPath = System.getenv("KEYSTORE_PATH")
-            if (ksPath != null && java.io.File(ksPath).exists()) {
-                storeFile = java.io.File(ksPath)
+            if (ksPath != null && File(ksPath).exists()) {
+                storeFile = File(ksPath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
@@ -23,7 +25,7 @@ android {
     buildTypes {
         getByName("debug") {
             val ksPath = System.getenv("KEYSTORE_PATH")
-            if (ksPath != null && java.io.File(ksPath).exists()) {
+            if (ksPath != null && File(ksPath).exists()) {
                 signingConfig = signingConfigs.getByName("appmarketKey")
             }
         }
