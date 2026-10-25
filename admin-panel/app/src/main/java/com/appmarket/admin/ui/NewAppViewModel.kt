@@ -126,7 +126,8 @@ class NewAppViewModel @Inject constructor(
                     try {
                         notifier.sendToAllUsers(
                             title = "নতুন অ্যাপ: ${s.name.trim()}".take(65),
-                            body = s.description.trim().ifBlank { "এখন AppMarket-এ পাওয়া যাচ্ছে" }.take(240)
+                            body = s.description.trim().ifBlank { "এখন AppMarket-এ পাওয়া যাচ্ছে" }.take(240),
+                            imageUrl = iconUrl
                         )
                     } catch (e: Exception) {
                         message += ", কিন্তু নোটিফিকেশন যায়নি: ${e.message}"

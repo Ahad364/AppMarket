@@ -223,7 +223,8 @@ class AdminHomeViewModel @Inject constructor(
                     try {
                         notifier.sendToAllUsers(
                             title = "আপডেট: ${app.name}".take(65),
-                            body = "নতুন ভার্সন $versionName এখন পাওয়া যাচ্ছে".take(240)
+                            body = "নতুন ভার্সন $versionName এখন পাওয়া যাচ্ছে".take(240),
+                            imageUrl = app.iconUrl
                         )
                         message += ", নোটিফিকেশন পাঠানো হয়েছে"
                     } catch (e: Exception) {

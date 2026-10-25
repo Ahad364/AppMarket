@@ -363,6 +363,12 @@ async function handleNotify(request, env) {
     return json({ error: "title or body is too long" }, 400);
   }
 
+  // Optional app logo. Only https links are allowed.
+  const imageUrl = String(payload.imageUrl ?? "").trim();
+  if (imageUrl && (!imageUrl.startsWith("https://") || imageUrl.length > 500)) {
+    return json({ error: "imageUrl must be an https link" }, 400);
+  }
+
   try {
     const sa = JSON.parse(env.FCM_SERVICE_ACCOUNT);
     const accessToken = await getGoogleAccessToken(sa);
@@ -375,9 +381,11 @@ async function handleNotify(request, env) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          // Data-only message: the app builds the notification itself (in foreground and background),
+          // so it can show the app logo as the large icon.
           message: {
             topic: NOTIFY_TOPIC,
-            notification: { title, body },
+            data: { title, body, imageUrl },
             android: { priority: "high" },
           },
         }),

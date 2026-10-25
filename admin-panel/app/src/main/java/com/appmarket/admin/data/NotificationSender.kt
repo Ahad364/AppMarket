@@ -26,11 +26,16 @@ class NotificationSender @Inject constructor(
         .callTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun sendToAllUsers(title: String, body: String) = withContext(Dispatchers.IO) {
+    /** imageUrl is the app logo to show in the notification. Leave it empty for a plain message. */
+    suspend fun sendToAllUsers(title: String, body: String, imageUrl: String = "") = withContext(Dispatchers.IO) {
         val idToken = auth.currentUser?.getIdToken(false)?.await()?.token
             ?: throw IllegalStateException("লগইন প্রয়োজন")
 
-        val payload = JSONObject().put("title", title).put("body", body).toString()
+        val payload = JSONObject()
+            .put("title", title)
+            .put("body", body)
+            .put("imageUrl", imageUrl)
+            .toString()
         val request = Request.Builder()
             .url("${BuildConfig.WORKER_BASE_URL}/notify")
             .header("Authorization", "Bearer $idToken")
