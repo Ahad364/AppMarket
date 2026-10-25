@@ -7,8 +7,6 @@ import com.appmarket.admin.data.AdminRepository
 import com.appmarket.admin.data.ApkUploader
 import com.appmarket.admin.data.IconUploader
 import com.appmarket.admin.data.NotificationSender
-
-private const val MAX_SCREENSHOTS = 6
 import com.appmarket.admin.model.AdminApp
 import com.appmarket.admin.model.AdminUser
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private const val MAX_SCREENSHOTS = 6
 
 // ---------- Login ----------
 
