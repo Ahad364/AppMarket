@@ -84,7 +84,7 @@ fun AppCard(app: AppItem, updateAvailable: Boolean = false, onClick: () -> Unit)
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -109,6 +109,29 @@ fun AppCard(app: AppItem, updateAvailable: Boolean = false, onClick: () -> Unit)
                 )
                 Spacer(Modifier.height(6.dp))
                 RatingRow(app.averageRating, app.ratingCount)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (app.category.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                app.category,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        formatBytes(app.sizeBytes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (updateAvailable) {
                     Spacer(Modifier.height(6.dp))
                     Box(
@@ -161,5 +184,18 @@ fun StarPicker(value: Int, onChange: (Int) -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** Human-readable APK size, e.g. "512 KB", "12.5 MB". Shows an em dash when the size is unknown. */
+fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "—"
+    val kb = 1024.0
+    val mb = kb * 1024
+    val gb = mb * 1024
+    return when {
+        bytes >= gb -> String.format(Locale.US, "%.2f GB", bytes / gb)
+        bytes >= mb -> String.format(Locale.US, "%.1f MB", bytes / mb)
+        else -> String.format(Locale.US, "%.0f KB", bytes / kb)
     }
 }

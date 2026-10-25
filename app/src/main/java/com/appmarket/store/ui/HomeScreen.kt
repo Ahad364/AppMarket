@@ -1,5 +1,20 @@
 package com.appmarket.store.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,59 +22,72 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.align
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import kotlinx.coroutines.delay
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.text.style.TextOverflow
-import com.appmarket.store.model.AppItem
-import com.appmarket.store.model.HomeSlider
-import com.appmarket.store.R
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.appmarket.store.R
+import com.appmarket.store.model.AppItem
+import com.appmarket.store.model.HomeSlider
+import kotlinx.coroutines.delay
+import kotlin.math.absoluteValue
 
-/** Auto-sliding 16:9 banner slider from the Admin Panel's slider list. */
+/** Auto-sliding 16:9 banner slider. Side pages are slightly smaller and the app name shows on the image. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BannerSlider(slides: List<HomeSlider>, onOpenApp: (String) -> Unit) {
+private fun BannerSlider(slides: List<HomeSlider>, apps: List<AppItem>, onOpenApp: (String) -> Unit) {
     val pagerState = rememberPagerState(pageCount = { slides.size })
 
     LaunchedEffect(slides.size) {
@@ -76,36 +104,78 @@ private fun BannerSlider(slides: List<HomeSlider>, onOpenApp: (String) -> Unit) 
     Column(modifier = Modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pagerState,
+            contentPadding = PaddingValues(horizontal = 4.dp),
             pageSpacing = 12.dp,
             modifier = Modifier.fillMaxWidth()
         ) { page ->
             val slide = slides[page]
-            AsyncImage(
-                model = slide.imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+            val offset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                .absoluteValue
+                .coerceIn(0f, 1f)
+            val name = apps.firstOrNull { it.id == slide.appId }?.name
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .graphicsLayer {
+                        val scale = 1f - 0.08f * offset
+                        scaleX = scale
+                        scaleY = scale
+                    }
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(16.dp))
                     .clickable(enabled = slide.appId.isNotBlank()) { onOpenApp(slide.appId) }
-            )
+            ) {
+                AsyncImage(
+                    model = slide.imageUrl,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+                if (name != null) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))
+                                )
+                            )
+                    )
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(14.dp)
+                    )
+                }
+            }
         }
+
         if (slides.size > 1) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.Center
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 slides.indices.forEach { i ->
                     val active = i == pagerState.currentPage
+                    val dotWidth by animateDpAsState(
+                        targetValue = if (active) 22.dp else 8.dp,
+                        label = "dotWidth"
+                    )
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 3.dp)
-                            .size(if (active) 8.dp else 6.dp)
+                            .height(8.dp)
+                            .width(dotWidth)
                             .clip(CircleShape)
                             .background(
                                 if (active) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                             )
                     )
                 }
@@ -134,6 +204,61 @@ private fun FeaturedCard(app: AppItem, onClick: () -> Unit) {
     }
 }
 
+/** Each category gets a small icon so the chip row is easier to scan. */
+private fun categoryIcon(category: String) = when (category) {
+    "Productivity" -> Icons.Filled.Edit
+    "Games" -> Icons.Filled.PlayArrow
+    "Social" -> Icons.Filled.Face
+    "Tools" -> Icons.Filled.Build
+    "Education" -> Icons.Filled.Info
+    else -> Icons.Filled.Search
+}
+
+/** Pulsing grey placeholder rows shown while the first page of apps loads. */
+@Composable
+private fun ShimmerList() {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by transition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(animation = tween(850), repeatMode = RepeatMode.Reverse),
+        label = "shimmerAlpha"
+    )
+    val block = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        repeat(4) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(block))
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Box(Modifier.fillMaxWidth(0.6f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(block))
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.fillMaxWidth(0.4f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(block))
+                }
+            }
+        }
+    }
+}
+
+/** Fades and slides a list item in the first time it appears. */
+@Composable
+private fun EnterFromBelow(content: @Composable () -> Unit) {
+    val visibleState = remember { MutableTransitionState(false).apply { targetState = true } }
+    AnimatedVisibility(
+        visibleState = visibleState,
+        enter = fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 5 }
+    ) {
+        content()
+    }
+}
+
 @Composable
 fun HomeScreen(
     onOpenApp: (String) -> Unit,
@@ -141,13 +266,23 @@ fun HomeScreen(
     vm: HomeViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateCompat()
+    val listState = rememberLazyListState()
+    val scrolled by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(if (scrolled) 6.dp else 0.dp)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
             Image(
                 painter = painterResource(R.drawable.app_logo),
                 contentDescription = "AppMarket",
@@ -193,13 +328,34 @@ fun HomeScreen(
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             placeholder = { Text("অ্যাপ খুঁজুন") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) }
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLeadingIconColor = MaterialTheme.colorScheme.primary
+            )
         )
+
+        if (state.query.isBlank() && state.apps.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                state.apps.take(5).forEach { app ->
+                    AssistChip(
+                        onClick = { vm.onQueryChange(app.name) },
+                        label = { Text(app.name, maxLines = 1) }
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.height(12.dp))
 
         if (state.sliders.isNotEmpty()) {
-            BannerSlider(slides = state.sliders, onOpenApp = onOpenApp)
+            BannerSlider(slides = state.sliders, apps = state.apps, onOpenApp = onOpenApp)
             Spacer(Modifier.height(12.dp))
         }
 
@@ -213,7 +369,15 @@ fun HomeScreen(
                 FilterChip(
                     selected = state.category == c,
                     onClick = { vm.onCategory(c) },
-                    label = { Text(c) }
+                    label = { Text(c) },
+                    leadingIcon = {
+                        Icon(categoryIcon(c), contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                    )
                 )
             }
         }
@@ -241,12 +405,7 @@ fun HomeScreen(
         Spacer(Modifier.height(8.dp))
 
         when {
-            state.loading && state.apps.isEmpty() -> Box(
-                modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
+            state.loading && state.apps.isEmpty() -> ShimmerList()
             state.error != null -> Text(
                 "ত্রুটি: ${state.error}",
                 color = MaterialTheme.colorScheme.error,
@@ -259,15 +418,18 @@ fun HomeScreen(
                 modifier = Modifier.padding(top = 16.dp)
             )
             else -> LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.apps, key = { it.id }) { app ->
-                    AppCard(
-                        app = app,
-                        updateAvailable = vm.updateAvailable(app),
-                        onClick = { onOpenApp(app.id) }
-                    )
+                    EnterFromBelow {
+                        AppCard(
+                            app = app,
+                            updateAvailable = vm.updateAvailable(app),
+                            onClick = { onOpenApp(app.id) }
+                        )
+                    }
                 }
                 // "Load more" only for the plain listing; search returns its own results.
                 if (state.query.isBlank() && state.apps.size >= state.limit) {

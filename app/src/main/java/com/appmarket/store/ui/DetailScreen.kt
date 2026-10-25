@@ -187,7 +187,7 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 InfoItem("সংস্করণ", app.versionName)
-                InfoItem("আকার", "${app.sizeBytes / (1024 * 1024)} MB")
+                InfoItem("আকার", formatBytes(app.sizeBytes))
                 InfoItem("ধরন", app.category)
             }
         }
