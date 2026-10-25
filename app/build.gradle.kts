@@ -17,7 +17,7 @@ android {
             if (ksPath != null && File(ksPath).exists()) {
                 storeFile = File(ksPath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
+                keyAlias = System.getenv("KEY_ALIAS") ?: "appmarket"
                 keyPassword = System.getenv("KEY_PASSWORD")
             }
         }
