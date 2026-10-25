@@ -18,6 +18,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -83,6 +88,27 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
             else -> "আবার ইনস্টল করুন"
         }
 
+        // Screenshot gallery (admin-uploaded)
+        if (app.screenshots.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                app.screenshots.forEach { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .width(130.dp)
+                            .height(230.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         MarketCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(url = app.iconUrl, name = app.name, size = 88.dp)
@@ -116,7 +142,7 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
                     )
                 }
                 OutlinedButton(
-                    onClick = { shareApp(ctx, app.name) },
+                    onClick = { shareApp(ctx, app.name, app.id) },
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {
@@ -219,10 +245,12 @@ fun DetailScreen(onBack: () -> Unit, vm: DetailViewModel = hiltViewModel()) {
     }
 }
 
-private fun shareApp(ctx: Context, name: String) {
+private fun shareApp(ctx: Context, name: String, appId: String) {
+    // Opens a web page that forwards to the app (see Worker /app/{id}).
+    val link = "${com.appmarket.store.BuildConfig.DOWNLOAD_BASE_URL}/app/$appId"
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, "AppMarket-এ \"$name\" অ্যাপটি দেখুন")
+        putExtra(Intent.EXTRA_TEXT, "AppMarket-এ \"$name\" অ্যাপটি দেখুন:\n$link")
     }
     ctx.startActivity(Intent.createChooser(intent, "শেয়ার করুন"))
 }

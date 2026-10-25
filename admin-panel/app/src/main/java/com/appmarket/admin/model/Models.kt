@@ -16,5 +16,8 @@ data class AdminApp(
     val description: String,
     val category: String,
     val iconUrl: String,
-    val approved: Boolean
+    val approved: Boolean,
+    val featured: Boolean = false,
+    val screenshots: List<String> = emptyList(),
+    val bannerUrl: String = ""
 )

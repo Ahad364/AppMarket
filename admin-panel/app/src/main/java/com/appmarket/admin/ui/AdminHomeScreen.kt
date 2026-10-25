@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,6 +69,24 @@ fun AdminHomeScreen(
     var uploadTarget by remember { mutableStateOf<AdminApp?>(null) }
     var pendingUpload by remember { mutableStateOf<Pair<AdminApp, Uri>?>(null) }
     var notifyOpen by remember { mutableStateOf(false) }
+    var shotsOpen by remember { mutableStateOf<AdminApp?>(null) }
+    var shotTarget by remember { mutableStateOf<AdminApp?>(null) }
+    var bannerOpen by remember { mutableStateOf<AdminApp?>(null) }
+    var bannerTarget by remember { mutableStateOf<AdminApp?>(null) }
+
+    val bannerPicker = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val target = bannerTarget
+        if (uri != null && target != null) vm.uploadBanner(target, uri)
+    }
+
+    val shotPicker = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val target = shotTarget
+        if (uri != null && target != null) vm.addScreenshot(target, uri)
+    }
 
     val apkPicker = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         val target = uploadTarget
@@ -238,6 +261,10 @@ fun AdminHomeScreen(
                                 uploadTarget = app
                                 apkPicker.launch(APK_MIME_TYPES)
                             },
+                            featured = app.featured,
+                            onToggleFeatured = { vm.toggleFeatured(app) },
+                            onScreenshots = { shotsOpen = app },
+                            onBanner = { bannerOpen = app },
                             onToggleVisible = { vm.setApproved(app.id, !app.approved) },
                             onDelete = { pendingDelete = app }
                         )
@@ -266,6 +293,33 @@ fun AdminHomeScreen(
                 vm.uploadApk(app, uri, versionName, versionCode, notify)
                 pendingUpload = null
             }
+        )
+    }
+
+    bannerOpen?.let { opened ->
+        val live = state.apps.find { it.id == opened.id } ?: opened
+        BannerDialog(
+            app = live,
+            onPick = {
+                bannerTarget = live
+                bannerPicker.launch("image/*")
+            },
+            onDelete = { vm.deleteBanner(live) },
+            onDismiss = { bannerOpen = null }
+        )
+    }
+
+    shotsOpen?.let { opened ->
+        // Read the latest copy so the dialog reflects changes right away.
+        val live = state.apps.find { it.id == opened.id } ?: opened
+        ScreenshotDialog(
+            app = live,
+            onAdd = {
+                shotTarget = live
+                shotPicker.launch("image/*")
+            },
+            onRemove = { url -> vm.removeScreenshot(live, url) },
+            onDismiss = { shotsOpen = null }
         )
     }
 
@@ -299,6 +353,116 @@ fun AdminHomeScreen(
             }
         )
     }
+}
+
+@Composable
+private fun BannerDialog(
+    app: AdminApp,
+    onPick: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ব্যানার: ${app.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "১৬:৯ অনুপাতের ছবি দিন (যেমন 1280×720)। ৩ MB-এর কম, PNG, JPEG বা WebP। ফিচার্ড অ্যাপের জন্য হোমে এটি দেখাবে।",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (app.bannerUrl.isBlank()) {
+                    Text(
+                        "এখনও কোনো ব্যানার নেই।",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    AsyncImage(
+                        model = app.bannerUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+                }
+                OutlinedButton(
+                    onClick = onPick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (app.bannerUrl.isBlank()) "ব্যানার আপলোড করুন" else "ব্যানার বদলান")
+                }
+                if (app.bannerUrl.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("ব্যানার মুছুন", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("বন্ধ করুন") }
+        }
+    )
+}
+
+@Composable
+private fun ScreenshotDialog(
+    app: AdminApp,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("স্ক্রিনশট: ${app.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "সর্বোচ্চ ৬টি ছবি। ছবি ৩ MB-এর কম হতে হবে (PNG, JPEG বা WebP)।",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (app.screenshots.isEmpty()) {
+                    Text(
+                        "এখনও কোনো স্ক্রিনশট নেই।",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                app.screenshots.forEach { url ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIconBox(url = url, size = 56.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "ছবি",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        TextButton(onClick = { onRemove(url) }) {
+                            Text("মুছুন", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = onAdd,
+                    enabled = app.screenshots.size < 6,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("ছবি যোগ করুন") }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("বন্ধ করুন") }
+        }
+    )
 }
 
 @Composable
@@ -558,8 +722,12 @@ private fun UserRow(user: AdminUser, isSelf: Boolean, onToggleBan: () -> Unit) {
 private fun AppRow(
     app: AdminApp,
     uploading: Boolean,
+    featured: Boolean,
     onEdit: () -> Unit,
     onUploadApk: () -> Unit,
+    onToggleFeatured: () -> Unit,
+    onScreenshots: () -> Unit,
+    onBanner: () -> Unit,
     onToggleVisible: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -609,6 +777,29 @@ private fun AppRow(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+                onClick = onToggleFeatured,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    if (featured) "★ ফিচার্ড" else "ফিচার্ড করুন",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+            OutlinedButton(
+                onClick = onBanner,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("ব্যানার", style = MaterialTheme.typography.labelLarge) }
+            OutlinedButton(
+                onClick = onScreenshots,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("স্ক্রিনশট", style = MaterialTheme.typography.labelLarge) }
         }
         Spacer(Modifier.height(6.dp))
         OutlinedButton(

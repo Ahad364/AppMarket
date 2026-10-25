@@ -56,6 +56,7 @@ data class HomeUiState(
     val query: String = "",
     val category: String? = null,
     val apps: List<AppItem> = emptyList(),
+    val featured: List<AppItem> = emptyList(),
     val limit: Int = PAGE_SIZE,
     val loading: Boolean = false,
     val error: String? = null
@@ -101,7 +102,13 @@ class HomeViewModel @Inject constructor(private val repo: StoreRepository) : Vie
                     repo.searchApps(snapshot.query)
                         .filter { snapshot.category == null || it.category == snapshot.category }
                 }
-                _state.value = _state.value.copy(apps = apps, loading = false)
+                // Featured banner only on the plain home listing.
+                val featured = if (snapshot.query.isBlank() && snapshot.category == null) {
+                    runCatching { repo.listFeatured() }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
+                _state.value = _state.value.copy(apps = apps, featured = featured, loading = false)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(loading = false, error = e.message)
             }

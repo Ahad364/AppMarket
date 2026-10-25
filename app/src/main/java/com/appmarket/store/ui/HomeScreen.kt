@@ -12,6 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +42,41 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+
+/** Full-width-style 16:9 banner for a featured app that has a banner image. */
+@Composable
+private fun FeaturedBanner(app: AppItem, onClick: () -> Unit) {
+    AsyncImage(
+        model = app.bannerUrl,
+        contentDescription = app.name,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .width(300.dp)
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+    )
+}
+
+@Composable
+private fun FeaturedCard(app: AppItem, onClick: () -> Unit) {
+    MarketCard(modifier = Modifier.width(150.dp).clickable(onClick = onClick)) {
+        AppIcon(url = app.iconUrl, name = app.name, size = 64.dp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            app.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            app.category,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
 
 @Composable
 fun HomeScreen(
@@ -106,6 +150,24 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+        if (state.featured.isNotEmpty()) {
+            Text(
+                "ফিচার্ড",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(state.featured, key = { it.id }) { app ->
+                    if (app.bannerUrl.isNotBlank()) {
+                        FeaturedBanner(app = app, onClick = { onOpenApp(app.id) })
+                    } else {
+                        FeaturedCard(app = app, onClick = { onOpenApp(app.id) })
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         Text(
             "সব অ্যাপ",
             style = MaterialTheme.typography.titleMedium,

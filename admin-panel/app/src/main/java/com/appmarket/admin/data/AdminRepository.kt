@@ -55,6 +55,7 @@ class AdminRepository @Inject constructor(
 
     suspend fun loadApps(): List<AdminApp> {
         val appsSnap = root.child("apps").get().await()
+        val featuredSnap = root.child("featured").get().await()
         return appsSnap.children.map { a ->
             AdminApp(
                 id = a.key.orEmpty(),
@@ -65,7 +66,10 @@ class AdminRepository @Inject constructor(
                 versionCode = a.child("versionCode").getValue(Long::class.java)?.toInt() ?: 0,
                 description = a.child("description").getValue(String::class.java).orEmpty(),
                 category = a.child("category").getValue(String::class.java).orEmpty(),
-                approved = a.child("approved").getValue(Boolean::class.java) != false
+                approved = a.child("approved").getValue(Boolean::class.java) != false,
+                featured = featuredSnap.child(a.key.orEmpty()).getValue(Boolean::class.java) == true,
+                screenshots = a.child("screenshots").children.mapNotNull { it.getValue(String::class.java) },
+                bannerUrl = a.child("bannerUrl").getValue(String::class.java).orEmpty()
             )
         }.sortedBy { it.name.lowercase() }
     }
@@ -153,6 +157,23 @@ class AdminRepository @Inject constructor(
             )
         ).await()
         return ref.key.orEmpty()
+    }
+
+    /** Pins or unpins an app on the user home banner. */
+    suspend fun setFeatured(appId: String, featured: Boolean) {
+        val ref = root.child("featured").child(appId)
+        if (featured) ref.setValue(true).await() else ref.removeValue().await()
+    }
+
+    /** Replaces the screenshot URL list. An empty list removes the node. */
+    suspend fun setScreenshots(appId: String, urls: List<String>) {
+        root.child("apps").child(appId).child("screenshots")
+            .setValue(if (urls.isEmpty()) null else urls).await()
+    }
+
+    /** Saves the banner URL, or removes it when url is null. */
+    suspend fun setBanner(appId: String, url: String?) {
+        root.child("apps").child(appId).child("bannerUrl").setValue(url).await()
     }
 
     suspend fun setApproved(appId: String, approved: Boolean) {

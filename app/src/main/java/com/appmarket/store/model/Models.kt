@@ -14,7 +14,9 @@ data class AppItem(
     val sizeBytes: Long,
     val ratingSum: Long,
     val ratingCount: Long,
-    val approved: Boolean = true   // admins can hide an app; hidden apps are not listed
+    val approved: Boolean = true,  // admins can hide an app; hidden apps are not listed
+    val screenshots: List<String> = emptyList(),  // public image URLs, max 6
+    val bannerUrl: String = ""                    // 16:9 home banner, shown for featured apps
 ) {
     val averageRating: Float
         get() = if (ratingCount == 0L) 0f else ratingSum.toFloat() / ratingCount

@@ -156,6 +156,14 @@ class StoreRepository @Inject constructor(
         }.sortedBy { it.name.lowercase() }
     }
 
+    /** Apps the admin pinned to the home banner. Hidden apps are skipped. */
+    suspend fun listFeatured(): List<AppItem> {
+        val ids = root.child("featured").get().await().children.mapNotNull { it.key }.toSet()
+        if (ids.isEmpty()) return emptyList()
+        return apps.get().await().children.mapNotNull { it.toAppItem() }
+            .filter { it.id in ids && it.approved }
+    }
+
     /** Every app, including hidden ones. Admin only. */
     suspend fun listAllAppsForAdmin(): List<AppItem> =
         apps.get().await().children.mapNotNull { it.toAppItem() }.sortedBy { it.name.lowercase() }
@@ -380,7 +388,9 @@ class StoreRepository @Inject constructor(
             sizeBytes = num("sizeBytes"),
             ratingSum = num("ratingSum"),
             ratingCount = num("ratingCount"),
-            approved = child("approved").getValue(Boolean::class.java) != false
+            approved = child("approved").getValue(Boolean::class.java) != false,
+            screenshots = child("screenshots").children.mapNotNull { it.getValue(String::class.java) },
+            bannerUrl = str("bannerUrl")
         )
     }
 

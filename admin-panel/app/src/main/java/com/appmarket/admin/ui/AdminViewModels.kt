@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appmarket.admin.data.AdminRepository
 import com.appmarket.admin.data.ApkUploader
+import com.appmarket.admin.data.IconUploader
 import com.appmarket.admin.data.NotificationSender
+
+private const val MAX_SCREENSHOTS = 6
 import com.appmarket.admin.model.AdminApp
 import com.appmarket.admin.model.AdminUser
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -62,8 +65,77 @@ data class HomeState(
 class AdminHomeViewModel @Inject constructor(
     private val repo: AdminRepository,
     private val uploader: ApkUploader,
-    private val notifier: NotificationSender
+    private val notifier: NotificationSender,
+    private val iconUploader: IconUploader
 ) : ViewModel() {
+
+    fun toggleFeatured(app: AdminApp) {
+        viewModelScope.launch {
+            try {
+                repo.setFeatured(app.id, !app.featured)
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun addScreenshot(app: AdminApp, uri: Uri) {
+        if (app.screenshots.size >= MAX_SCREENSHOTS) {
+            _state.value = _state.value.copy(error = "একটি অ্যাপে সর্বোচ্চ $MAX_SCREENSHOTS টি স্ক্রিনশট")
+            return
+        }
+        _state.value = _state.value.copy(uploading = true, uploadProgress = 0f, error = null, notice = null)
+        viewModelScope.launch {
+            try {
+                val url = iconUploader.uploadScreenshot(uri, app.packageName)
+                repo.setScreenshots(app.id, app.screenshots + url)
+                _state.value = _state.value.copy(uploading = false, notice = "স্ক্রিনশট যোগ হয়েছে")
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(uploading = false, error = e.message ?: "আপলোড ব্যর্থ হয়েছে")
+            }
+        }
+    }
+
+    fun uploadBanner(app: AdminApp, uri: Uri) {
+        _state.value = _state.value.copy(uploading = true, uploadProgress = 0f, error = null, notice = null)
+        viewModelScope.launch {
+            try {
+                val url = iconUploader.uploadBanner(uri, app.packageName)
+                // A fresh URL each time avoids cached old banners on the phone.
+                repo.setBanner(app.id, "$url?v=${System.currentTimeMillis()}")
+                _state.value = _state.value.copy(uploading = false, notice = "\"${app.name}\" এর ব্যানার সেভ হয়েছে")
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(uploading = false, error = e.message ?: "ব্যানার আপলোড ব্যর্থ")
+            }
+        }
+    }
+
+    fun deleteBanner(app: AdminApp) {
+        viewModelScope.launch {
+            try {
+                repo.setBanner(app.id, null)
+                runCatching { iconUploader.deleteBanner(app.packageName) }
+                _state.value = _state.value.copy(notice = "ব্যানার মুছে ফেলা হয়েছে")
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message ?: "ব্যানার মোছা যায়নি")
+            }
+        }
+    }
+
+    fun removeScreenshot(app: AdminApp, url: String) {
+        viewModelScope.launch {
+            try {
+                repo.setScreenshots(app.id, app.screenshots - url)
+                refresh()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message)
+            }
+        }
+    }
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 

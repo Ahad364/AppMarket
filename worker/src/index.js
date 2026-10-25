@@ -1,18 +1,24 @@
 // AppMarket Worker (Cloudflare)
-// - GET  /apks/...      : requires a valid Firebase ID token (Authorization: Bearer <token>)
-// - GET  /icons/...     : public, cached
-// - POST /upload-apk    : admin only. Raw APK bytes in the body.
-//                         Headers: X-Package-Name, X-Version-Code
-//                         Returns: { ok, apkPath, sizeBytes }
-// - POST /notify        : admin only. Sends an FCM push to topic "all_users".
-//                         Body: { "title": "...", "body": "..." }
+// - GET  /apks/...        : requires a valid Firebase ID token (Authorization: Bearer <token>)
+// - GET  /icons/...       : public, cached
+// - GET  /screenshots/... : public, cached
+// - GET  /app/{id}        : share page that opens appmarket://app/{id}
+// - POST /upload-apk      : admin only. Raw APK bytes. Headers: X-Package-Name, X-Version-Code
+// - POST /upload-icon     : admin only. Raw image bytes. Header: X-Package-Name
+// - POST /upload-screenshot : admin only. Raw image bytes. Headers: X-Package-Name, X-Shot-Id
+// - POST /notify          : admin only. Body: { "title": "...", "body": "..." }
 
 const APK_PREFIX = "apks/";
 const ICON_PREFIX = "icons/";
+const SHOT_PREFIX = "screenshots/";
 const NOTIFY_TOPIC = "all_users";
 const MAX_TITLE = 65;
 const MAX_BODY = 240;
 const MAX_APK_BYTES = 50 * 1024 * 1024;
+const MAX_ICON_BYTES = 2 * 1024 * 1024;
+const MAX_SHOT_BYTES = 3 * 1024 * 1024;
+const BANNER_PREFIX = "banners/";
+const MAX_BANNER_BYTES = 3 * 1024 * 1024;
 
 export default {
   async fetch(request, env) {
@@ -27,6 +33,18 @@ export default {
     if (request.method === "POST" && url.pathname === "/upload-icon") {
       return handleUploadIcon(request, env, url.origin);
     }
+    if (request.method === "POST" && url.pathname === "/upload-banner") {
+      return handleUploadBanner(request, env, url.origin);
+    }
+    if (request.method === "POST" && url.pathname === "/delete-banner") {
+      return handleDeleteBanner(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/upload-screenshot") {
+      return handleUploadScreenshot(request, env, url.origin);
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/app/")) {
+      return appLinkPage(url.pathname.slice("/app/".length));
+    }
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405 });
@@ -35,7 +53,9 @@ export default {
     const key = decodeURIComponent(url.pathname.slice(1));
     const isApk = key.startsWith(APK_PREFIX);
     const isIcon = key.startsWith(ICON_PREFIX);
-    if (!(isApk || isIcon) || key.includes("..")) {
+    const isShot = key.startsWith(SHOT_PREFIX);
+    const isBanner = key.startsWith(BANNER_PREFIX);
+    if (!(isApk || isIcon || isShot || isBanner) || key.includes("..")) {
       return new Response("Not found", { status: 404 });
     }
 
@@ -65,6 +85,32 @@ export default {
   },
 };
 
+// ---------- Share page ----------
+
+// A small web page. It opens the app with appmarket://app/{id}.
+// Only safe id characters are accepted, so the page cannot be used for injection.
+function appLinkPage(rawId) {
+  const id = decodeURIComponent(rawId);
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+    return new Response("Not found", { status: 404 });
+  }
+  const deepLink = `appmarket://app/${id}`;
+  const html = `<!doctype html>
+<html lang="bn"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AppMarket</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:48px 16px;background:#0B1120;color:#F1F5F9">
+<h2>AppMarket</h2>
+<p>অ্যাপটি দেখতে নিচের বাটনে চাপুন।</p>
+<p><a href="${deepLink}" style="display:inline-block;padding:14px 26px;border-radius:14px;background:#4F46E5;color:#fff;text-decoration:none">AppMarket-এ খুলুন</a></p>
+<p style="color:#94A3B8;font-size:13px">AppMarket ইনস্টল না থাকলে আগে সেটি ইনস্টল করুন।</p>
+<script>setTimeout(function(){ location.href = "${deepLink}"; }, 400);</script>
+</body></html>`;
+  return new Response(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 // ---------- Admin check (shared) ----------
 
 // Returns a Response when the caller is NOT an admin, or null when they are.
@@ -85,6 +131,27 @@ async function requireAdmin(request, env) {
   return null;
 }
 
+function validPackage(pkg) {
+  return /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg);
+}
+
+// Recognises PNG, JPEG and WebP by their first bytes.
+function imageType(bytes) {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return { ext: "png", type: "image/png" };
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { ext: "jpg", type: "image/jpeg" };
+  }
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return { ext: "webp", type: "image/webp" };
+  }
+  return null;
+}
+
 // ---------- APK upload (admin only) ----------
 
 async function handleUploadApk(request, env) {
@@ -92,9 +159,7 @@ async function handleUploadApk(request, env) {
   if (denied) return denied;
 
   const pkg = (request.headers.get("X-Package-Name") || "").trim();
-  if (!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)) {
-    return json({ error: "invalid package name" }, 400);
-  }
+  if (!validPackage(pkg)) return json({ error: "invalid package name" }, 400);
 
   const versionCode = Number(request.headers.get("X-Version-Code"));
   if (!Number.isInteger(versionCode) || versionCode <= 0) {
@@ -102,9 +167,7 @@ async function handleUploadApk(request, env) {
   }
 
   const declared = Number(request.headers.get("content-length") || "0");
-  if (declared > MAX_APK_BYTES) {
-    return json({ error: "APK is larger than 50 MB" }, 413);
-  }
+  if (declared > MAX_APK_BYTES) return json({ error: "APK is larger than 50 MB" }, 413);
 
   const bytes = new Uint8Array(await request.arrayBuffer());
   if (bytes.length === 0 || bytes.length > MAX_APK_BYTES) {
@@ -113,9 +176,7 @@ async function handleUploadApk(request, env) {
 
   // An APK is a ZIP archive, so it must start with "PK\x03\x04".
   const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
-  if (!isZip) {
-    return json({ error: "file is not a valid APK" }, 400);
-  }
+  if (!isZip) return json({ error: "file is not a valid APK" }, 400);
 
   const key = `${APK_PREFIX}${pkg}-${versionCode}.apk`;
   await env.APK_BUCKET.put(key, bytes, {
@@ -127,52 +188,107 @@ async function handleUploadApk(request, env) {
 
 // ---------- Icon upload (admin only) ----------
 
-const MAX_ICON_BYTES = 2 * 1024 * 1024;
-
 async function handleUploadIcon(request, env, origin) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
 
   const pkg = (request.headers.get("X-Package-Name") || "").trim();
-  if (!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)) {
-    return json({ error: "invalid package name" }, 400);
-  }
+  if (!validPackage(pkg)) return json({ error: "invalid package name" }, 400);
 
   const declared = Number(request.headers.get("content-length") || "0");
-  if (declared > MAX_ICON_BYTES) {
-    return json({ error: "icon is larger than 2 MB" }, 413);
-  }
+  if (declared > MAX_ICON_BYTES) return json({ error: "icon is larger than 2 MB" }, 413);
 
   const bytes = new Uint8Array(await request.arrayBuffer());
   if (bytes.length === 0 || bytes.length > MAX_ICON_BYTES) {
     return json({ error: "icon is empty or larger than 2 MB" }, 413);
   }
 
-  // Check the file signature, not the header the client sent.
-  let ext;
-  let type;
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    ext = "png"; type = "image/png";
-  } else if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    ext = "jpg"; type = "image/jpeg";
-  } else if (
-    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
-  ) {
-    ext = "webp"; type = "image/webp";
-  } else {
-    return json({ error: "icon must be PNG, JPEG or WebP" }, 400);
-  }
+  const img = imageType(bytes);
+  if (!img) return json({ error: "icon must be PNG, JPEG or WebP" }, 400);
 
   // Remove older icons with a different extension so only one remains per app.
   for (const other of ["png", "jpg", "webp"]) {
-    if (other !== ext) await env.APK_BUCKET.delete(`${ICON_PREFIX}${pkg}.${other}`);
+    if (other !== img.ext) await env.APK_BUCKET.delete(`${ICON_PREFIX}${pkg}.${other}`);
   }
 
-  const key = `${ICON_PREFIX}${pkg}.${ext}`;
-  await env.APK_BUCKET.put(key, bytes, { httpMetadata: { contentType: type } });
+  const key = `${ICON_PREFIX}${pkg}.${img.ext}`;
+  await env.APK_BUCKET.put(key, bytes, { httpMetadata: { contentType: img.type } });
 
   return json({ ok: true, iconUrl: `${origin}/${key}` }, 200);
+}
+
+// ---------- Screenshot upload (admin only) ----------
+
+async function handleUploadScreenshot(request, env, origin) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+
+  const pkg = (request.headers.get("X-Package-Name") || "").trim();
+  if (!validPackage(pkg)) return json({ error: "invalid package name" }, 400);
+
+  // A random id from the app. Only letters and digits are allowed.
+  const shotId = (request.headers.get("X-Shot-Id") || "").trim();
+  if (!/^[A-Za-z0-9]{1,32}$/.test(shotId)) return json({ error: "invalid screenshot id" }, 400);
+
+  const declared = Number(request.headers.get("content-length") || "0");
+  if (declared > MAX_SHOT_BYTES) return json({ error: "screenshot is larger than 3 MB" }, 413);
+
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > MAX_SHOT_BYTES) {
+    return json({ error: "screenshot is empty or larger than 3 MB" }, 413);
+  }
+
+  const img = imageType(bytes);
+  if (!img) return json({ error: "screenshot must be PNG, JPEG or WebP" }, 400);
+
+  const key = `${SHOT_PREFIX}${pkg}/${shotId}.${img.ext}`;
+  await env.APK_BUCKET.put(key, bytes, { httpMetadata: { contentType: img.type } });
+
+  return json({ ok: true, screenshotUrl: `${origin}/${key}` }, 200);
+}
+
+// ---------- Banner upload and delete (admin only) ----------
+
+// One banner per app. A new upload replaces the old file (same name), even with a different extension.
+async function handleUploadBanner(request, env, origin) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+
+  const pkg = (request.headers.get("X-Package-Name") || "").trim();
+  if (!validPackage(pkg)) return json({ error: "invalid package name" }, 400);
+
+  const declared = Number(request.headers.get("content-length") || "0");
+  if (declared > MAX_BANNER_BYTES) return json({ error: "banner is larger than 3 MB" }, 413);
+
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > MAX_BANNER_BYTES) {
+    return json({ error: "banner is empty or larger than 3 MB" }, 413);
+  }
+
+  const img = imageType(bytes);
+  if (!img) return json({ error: "banner must be PNG, JPEG or WebP" }, 400);
+
+  for (const other of ["png", "jpg", "webp"]) {
+    if (other !== img.ext) await env.APK_BUCKET.delete(`${BANNER_PREFIX}${pkg}.${other}`);
+  }
+
+  const key = `${BANNER_PREFIX}${pkg}.${img.ext}`;
+  await env.APK_BUCKET.put(key, bytes, { httpMetadata: { contentType: img.type } });
+
+  return json({ ok: true, bannerUrl: `${origin}/${key}` }, 200);
+}
+
+async function handleDeleteBanner(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+
+  const pkg = (request.headers.get("X-Package-Name") || "").trim();
+  if (!validPackage(pkg)) return json({ error: "invalid package name" }, 400);
+
+  for (const ext of ["png", "jpg", "webp"]) {
+    await env.APK_BUCKET.delete(`${BANNER_PREFIX}${pkg}.${ext}`);
+  }
+  return json({ ok: true }, 200);
 }
 
 // ---------- Notifications (admin only) ----------

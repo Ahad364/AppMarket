@@ -1,6 +1,9 @@
 package com.appmarket.store.ui
 
 import android.Manifest
+import android.content.Intent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.navigation.compose.currentBackStackEntryAsState
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -44,7 +47,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDeepLink(intent)
+        setupPermissionAndContent(savedInstanceState)
+    }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme == "appmarket" && data.host == "app") {
+            data.lastPathSegment?.takeIf { it.isNotBlank() }?.let { DeepLinks.set(it) }
+        }
+    }
+
+    private fun setupPermissionAndContent(savedInstanceState: Bundle?) {
         // Android 13+ needs the user's permission before notifications can show.
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -66,6 +85,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MarketNavHost(startSignedIn: Boolean) {
     val nav = rememberNavController()
+
+    // Open an app from a deep link once the home screen is showing.
+    val pendingAppId by DeepLinks.pending.collectAsStateCompat()
+    val backStack by nav.currentBackStackEntryAsState()
+    LaunchedEffect(pendingAppId, backStack?.destination?.route) {
+        val id = pendingAppId
+        if (id != null && backStack?.destination?.route == Routes.HOME) {
+            DeepLinks.consume()
+            nav.navigate(Routes.detail(id))
+        }
+    }
+
     NavHost(navController = nav, startDestination = if (startSignedIn) Routes.HOME else Routes.AUTH) {
         composable(Routes.AUTH) {
             AuthScreen(onAuthenticated = {
