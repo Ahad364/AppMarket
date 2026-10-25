@@ -1,6 +1,8 @@
 package com.appmarket.store.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +50,7 @@ fun AppIcon(url: String, name: String, size: Dp) {
         modifier = Modifier
             .size(size)
             .clip(shape)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
             .background(MaterialTheme.colorScheme.secondaryContainer)
     ) {
         AsyncImage(
@@ -66,7 +69,8 @@ fun MarketCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), content = content)
     }
@@ -79,13 +83,14 @@ fun AppCard(app: AppItem, updateAvailable: Boolean = false, onClick: () -> Unit)
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AppIcon(url = app.iconUrl, name = app.name, size = 60.dp)
+            AppIcon(url = app.iconUrl, name = app.name, size = 64.dp)
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -105,12 +110,19 @@ fun AppCard(app: AppItem, updateAvailable: Boolean = false, onClick: () -> Unit)
                 Spacer(Modifier.height(6.dp))
                 RatingRow(app.averageRating, app.ratingCount)
                 if (updateAvailable) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "আপডেট আছে",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            "আপডেট আছে",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
         }
