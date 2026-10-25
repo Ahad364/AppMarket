@@ -15,10 +15,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare signing key
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          P1: ${{ secrets.KEYSTORE_PART1 }}
+          P2: ${{ secrets.KEYSTORE_PART2 }}
+          P3: ${{ secrets.KEYSTORE_PART3 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/appmarket.jks"
+          if [ -n "$P1" ]; then
+            printf '%s%s%s' "$P1" "$P2" "$P3" | base64 -d > "$RUNNER_TEMP/appmarket.jks"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/appmarket.jks" >> "$GITHUB_ENV"
           fi
       - name: Verify keystore
