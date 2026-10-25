@@ -47,7 +47,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -274,6 +273,7 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
+        // Pinned header: logo, title, refresh and profile buttons.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -319,6 +319,7 @@ fun HomeScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // Pinned search bar.
         OutlinedTextField(
             value = state.query,
             onValueChange = vm::onQueryChange,
@@ -333,110 +334,107 @@ fun HomeScreen(
             )
         )
 
-        if (state.query.isBlank() && state.apps.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                state.apps.take(5).forEach { app ->
-                    AssistChip(
-                        onClick = { vm.onQueryChange(app.name) },
-                        label = { Text(app.name, maxLines = 1) }
-                    )
-                }
-            }
-        }
-
         Spacer(Modifier.height(12.dp))
 
-        if (state.sliders.isNotEmpty()) {
-            BannerSlider(slides = state.sliders, apps = state.apps, onOpenApp = onOpenApp)
-            Spacer(Modifier.height(12.dp))
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Everything below the search bar scrolls together in one list.
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            vm.categories.forEach { c ->
-                FilterChip(
-                    selected = state.category == c,
-                    onClick = { vm.onCategory(c) },
-                    label = { Text(c) },
-                    leadingIcon = {
-                        Icon(categoryIcon(c), contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        if (state.featured.isNotEmpty()) {
-            Text(
-                "ফিচার্ড",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(state.featured, key = { it.id }) { app ->
-                    FeaturedCard(app = app, onClick = { onOpenApp(app.id) })
+            if (state.sliders.isNotEmpty()) {
+                item(key = "slider") {
+                    BannerSlider(slides = state.sliders, apps = state.apps, onOpenApp = onOpenApp)
                 }
             }
-            Spacer(Modifier.height(16.dp))
-        }
-        Text(
-            "সব অ্যাপ",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(8.dp))
 
-        when {
-            state.loading && state.apps.isEmpty() -> ShimmerList()
-            state.error != null -> Text(
-                "ত্রুটি: ${state.error}",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            state.apps.isEmpty() -> Text(
-                "কোনো অ্যাপ পাওয়া যায়নি।",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-            else -> LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(state.apps, key = { it.id }) { app ->
-                    EnterFromBelow {
-                        AppCard(
-                            app = app,
-                            updateAvailable = vm.updateAvailable(app),
-                            onClick = { onOpenApp(app.id) }
+            item(key = "categories") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    vm.categories.forEach { c ->
+                        FilterChip(
+                            selected = state.category == c,
+                            onClick = { vm.onCategory(c) },
+                            label = { Text(c) },
+                            leadingIcon = {
+                                Icon(categoryIcon(c), contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                            )
                         )
                     }
                 }
-                // "Load more" only for the plain listing; search returns its own results.
-                if (state.query.isBlank() && state.apps.size >= state.limit) {
-                    item {
-                        OutlinedButton(
-                            onClick = vm::loadMore,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) { Text("আরও দেখুন") }
+            }
+
+            if (state.featured.isNotEmpty()) {
+                item(key = "featured_title") {
+                    Text(
+                        "ফিচার্ড",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                item(key = "featured_row") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(state.featured, key = { it.id }) { app ->
+                            FeaturedCard(app = app, onClick = { onOpenApp(app.id) })
+                        }
+                    }
+                }
+            }
+
+            item(key = "all_title") {
+                Text(
+                    "সব অ্যাপ",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+
+            when {
+                state.loading && state.apps.isEmpty() -> item(key = "shimmer") { ShimmerList() }
+                state.error != null -> item(key = "error") {
+                    Text(
+                        "ত্রুটি: ${state.error}",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                state.apps.isEmpty() -> item(key = "empty") {
+                    Text(
+                        "কোনো অ্যাপ পাওয়া যায়নি।",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
+                else -> {
+                    items(state.apps, key = { it.id }) { app ->
+                        EnterFromBelow {
+                            AppCard(
+                                app = app,
+                                updateAvailable = vm.updateAvailable(app),
+                                onClick = { onOpenApp(app.id) }
+                            )
+                        }
+                    }
+                    // "Load more" only for the plain listing; search returns its own results.
+                    if (state.query.isBlank() && state.apps.size >= state.limit) {
+                        item(key = "load_more") {
+                            OutlinedButton(
+                                onClick = vm::loadMore,
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) { Text("আরও দেখুন") }
+                        }
                     }
                 }
             }
