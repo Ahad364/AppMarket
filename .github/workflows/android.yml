@@ -21,6 +21,15 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/appmarket.jks"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/appmarket.jks" >> "$GITHUB_ENV"
           fi
+      - name: Verify keystore
+        run: |
+          if [ -n "$KEYSTORE_PATH" ]; then
+            ls -l "$KEYSTORE_PATH"
+            sha256sum "$KEYSTORE_PATH"
+            keytool -list -keystore "$KEYSTORE_PATH" -storepass "$KEYSTORE_PASSWORD"
+          else
+            echo "No keystore secret found, debug key will be used"
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
