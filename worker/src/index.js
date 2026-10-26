@@ -17,7 +17,7 @@ const SHOT_PREFIX = "screenshots/";
 const NOTIFY_TOPIC = "all_users";
 const MAX_TITLE = 65;
 const MAX_BODY = 240;
-const MAX_APK_BYTES = 50 * 1024 * 1024;
+const MAX_APK_BYTES = 200 * 1024 * 1024;
 const MAX_ICON_BYTES = 2 * 1024 * 1024;
 const MAX_SHOT_BYTES = 3 * 1024 * 1024;
 const BANNER_PREFIX = "banners/";
@@ -179,11 +179,11 @@ async function handleUploadApk(request, env) {
   }
 
   const declared = Number(request.headers.get("content-length") || "0");
-  if (declared > MAX_APK_BYTES) return json({ error: "APK is larger than 50 MB" }, 413);
+  if (declared > MAX_APK_BYTES) return json({ error: "APK is larger than 200 MB" }, 413);
 
   const bytes = new Uint8Array(await request.arrayBuffer());
   if (bytes.length === 0 || bytes.length > MAX_APK_BYTES) {
-    return json({ error: "APK is empty or larger than 50 MB" }, 413);
+    return json({ error: "APK is empty or larger than 200 MB" }, 413);
   }
 
   // An APK is a ZIP archive, so it must start with "PK\x03\x04".

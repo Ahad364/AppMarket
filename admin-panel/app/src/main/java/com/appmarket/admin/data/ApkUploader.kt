@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-const val MAX_APK_BYTES = 50 * 1024 * 1024
+const val MAX_APK_BYTES = 200 * 1024 * 1024
 
 data class UploadResult(val apkPath: String, val sizeBytes: Long)
 
@@ -49,7 +49,7 @@ class ApkUploader @Inject constructor(
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IllegalStateException("ফাইল পড়া যায়নি")
         if (bytes.isEmpty()) throw IllegalStateException("ফাইলটি খালি")
-        if (bytes.size > MAX_APK_BYTES) throw IllegalStateException("APK ৫০ MB এর বেশি হতে পারবে না")
+        if (bytes.size > MAX_APK_BYTES) throw IllegalStateException("APK ২০০ MB এর বেশি হতে পারবে না")
 
         val request = Request.Builder()
             .url("${BuildConfig.WORKER_BASE_URL}/upload-apk")
