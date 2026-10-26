@@ -19,6 +19,7 @@ jobs:
           P2: ${{ secrets.KEYSTORE_PART2 }}
           P3: ${{ secrets.KEYSTORE_PART3 }}
         run: |
+          echo "Part lengths: ${#P1} ${#P2} ${#P3} (expected 1200 1200 1120)"
           if [ -n "$P1" ]; then
             printf '%s%s%s' "$P1" "$P2" "$P3" | base64 -d > "$RUNNER_TEMP/appmarket.jks"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/appmarket.jks" >> "$GITHUB_ENV"
