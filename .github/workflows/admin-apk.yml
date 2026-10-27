@@ -2,6 +2,9 @@ name: Build Admin APK
 
 on:
   push:
+    paths:
+      - 'admin-panel/**'
+      - '.github/workflows/admin-apk.yml'
   workflow_dispatch:
 
 jobs:
