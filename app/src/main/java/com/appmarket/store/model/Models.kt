@@ -49,3 +49,20 @@ data class AdminUser(
     val email: String,
     val banned: Boolean
 )
+
+/** One entry in the user's download history, stored under users/{uid}/downloads/{appId}. */
+data class DownloadRecord(
+    val appId: String,
+    val name: String,
+    val packageName: String,
+    val versionName: String,
+    val iconUrl: String,
+    val atMillis: Long
+)
+
+/** Latest published version of the AppMarket app itself, read from appInfo in the database. */
+data class LatestAppInfo(
+    val versionCode: Long,
+    val versionName: String,
+    val downloadUrl: String
+)

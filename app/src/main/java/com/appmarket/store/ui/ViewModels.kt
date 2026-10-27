@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appmarket.store.BuildConfig
+import com.appmarket.store.data.LanguagePrefs
 import com.appmarket.store.data.StoreRepository
 import com.appmarket.store.data.ThemePrefs
 import com.appmarket.store.model.AdminUser
@@ -258,6 +260,7 @@ class DetailViewModel @Inject constructor(
                     _state.value = _state.value.copy(install = InstallState.Downloading(p))
                 }
                 _state.value = _state.value.copy(install = InstallState.ReadyToInstall(file))
+                viewModelScope.launch { runCatching { repo.recordDownload(app) } }
             } catch (e: Exception) {
                 _state.value = _state.value.copy(install = InstallState.Failed(e.message ?: "Download failed"))
             }
@@ -293,10 +296,19 @@ class DetailViewModel @Inject constructor(
 
 // ---------- Profile ----------
 
+enum class NameResult { NONE, SAVED, FAILED }
+enum class UpdateStatus { IDLE, CHECKING, LATEST, AVAILABLE, FAILED }
+data class UpdateState(
+    val status: UpdateStatus = UpdateStatus.IDLE,
+    val versionName: String = "",
+    val downloadUrl: String = ""
+)
+
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val repo: StoreRepository,
-    private val themePrefs: ThemePrefs
+    private val themePrefs: ThemePrefs,
+    private val languagePrefs: LanguagePrefs
 ) : ViewModel() {
     private val _profile = MutableStateFlow<UserProfile?>(null)
     val profile: StateFlow<UserProfile?> = _profile.asStateFlow()
@@ -305,6 +317,16 @@ class ProfileViewModel @Inject constructor(
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
 
     val isDark: StateFlow<Boolean> = themePrefs.isDark
+    val lang: StateFlow<String> = languagePrefs.lang
+
+    private val _nameSaving = MutableStateFlow(false)
+    val nameSaving: StateFlow<Boolean> = _nameSaving.asStateFlow()
+
+    private val _nameResult = MutableStateFlow(NameResult.NONE)
+    val nameResult: StateFlow<NameResult> = _nameResult.asStateFlow()
+
+    private val _update = MutableStateFlow(UpdateState())
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -314,6 +336,40 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun setDark(value: Boolean) = themePrefs.setDark(value)
+
+    fun setLang(value: String) = languagePrefs.setLang(value)
+
+    fun updateName(newName: String) {
+        viewModelScope.launch {
+            _nameSaving.value = true
+            _nameResult.value = try {
+                repo.updateName(newName)
+                _profile.value = repo.currentProfile()
+                NameResult.SAVED
+            } catch (e: Exception) {
+                NameResult.FAILED
+            }
+            _nameSaving.value = false
+        }
+    }
+
+    /** Compares this app's version with appInfo in the database. */
+    fun checkUpdate() {
+        viewModelScope.launch {
+            _update.value = UpdateState(UpdateStatus.CHECKING)
+            _update.value = try {
+                val info = repo.latestAppInfo()
+                when {
+                    info == null || info.versionCode == 0L -> UpdateState(UpdateStatus.FAILED)
+                    info.versionCode > BuildConfig.VERSION_CODE.toLong() ->
+                        UpdateState(UpdateStatus.AVAILABLE, info.versionName, info.downloadUrl)
+                    else -> UpdateState(UpdateStatus.LATEST)
+                }
+            } catch (e: Exception) {
+                UpdateState(UpdateStatus.FAILED)
+            }
+        }
+    }
 
     fun signOut() = repo.signOut()
 }

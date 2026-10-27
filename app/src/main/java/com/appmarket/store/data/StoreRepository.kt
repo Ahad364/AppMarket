@@ -4,6 +4,8 @@ import android.content.Context
 import com.appmarket.store.BuildConfig
 import com.appmarket.store.model.AdminUser
 import com.appmarket.store.model.AppItem
+import com.appmarket.store.model.DownloadRecord
+import com.appmarket.store.model.LatestAppInfo
 import com.appmarket.store.model.HomeSlider
 import com.appmarket.store.model.Review
 import com.appmarket.store.model.UserProfile
@@ -359,6 +361,72 @@ class StoreRepository @Inject constructor(
             }
         }
         return file
+    }
+
+    // ---------- Profile edits, downloads, app version ----------
+
+    suspend fun updateName(newName: String) {
+        val user = auth.currentUser ?: throw IllegalStateException("Login required")
+        user.updateProfile(userProfileChangeRequest { displayName = newName }).await()
+        root.child("users").child(user.uid).child("name").setValue(newName).await()
+    }
+
+    /** Remembers an app the user downloaded. Called after a successful download. */
+    suspend fun recordDownload(app: AppItem) {
+        val uid = auth.currentUser?.uid ?: return
+        root.child("users").child(uid).child("downloads").child(app.id).setValue(
+            mapOf(
+                "name" to app.name,
+                "packageName" to app.packageName,
+                "versionName" to app.versionName,
+                "iconUrl" to app.iconUrl,
+                "at" to ServerValue.TIMESTAMP
+            )
+        ).await()
+    }
+
+    /** Emits the current user's downloads, newest first; updates live. */
+    fun downloadsFlow(): Flow<List<DownloadRecord>> = callbackFlow {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
+        val ref = root.child("users").child(uid).child("downloads")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                trySend(
+                    snapshot.children.map { d ->
+                        DownloadRecord(
+                            appId = d.key.orEmpty(),
+                            name = d.str("name"),
+                            packageName = d.str("packageName"),
+                            versionName = d.str("versionName"),
+                            iconUrl = d.str("iconUrl"),
+                            atMillis = d.child("at").getValue(Long::class.java) ?: 0L
+                        )
+                    }.sortedByDescending { it.atMillis }
+                )
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }
+
+    /** Reads appInfo, which the admin sets in the Firebase console. Null when not set. */
+    suspend fun latestAppInfo(): LatestAppInfo? {
+        val snap = root.child("appInfo").get().await()
+        if (!snap.exists()) return null
+        return LatestAppInfo(
+            versionCode = snap.child("versionCode").getValue(Long::class.java) ?: 0L,
+            versionName = snap.child("versionName").getValue(String::class.java).orEmpty(),
+            downloadUrl = snap.child("downloadUrl").getValue(String::class.java).orEmpty()
+        )
     }
 
     // ---------- Helpers ----------

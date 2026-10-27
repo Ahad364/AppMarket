@@ -2,6 +2,7 @@ package com.appmarket.store.ui
 
 import android.Manifest
 import android.content.Intent
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.currentBackStackEntryAsState
 import android.content.pm.PackageManager
@@ -21,6 +22,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.appmarket.store.data.LanguagePrefs
 import com.appmarket.store.data.StoreRepository
 import com.appmarket.store.data.ThemePrefs
 import dagger.hilt.android.AndroidEntryPoint
@@ -33,6 +35,7 @@ object Routes {
     const val PROFILE = "profile"
     const val ADMIN = "admin"
     const val MY_APPS = "myapps"
+    const val DOWNLOADS = "downloads"
     fun detail(appId: String) = "detail/$appId"
 }
 
@@ -41,6 +44,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var repo: StoreRepository
     @Inject lateinit var themePrefs: ThemePrefs
+    @Inject lateinit var languagePrefs: LanguagePrefs
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* granted or not, the app works */ }
@@ -73,9 +77,12 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val dark by themePrefs.isDark.collectAsStateCompat()
+            val lang by languagePrefs.lang.collectAsStateCompat()
             MarketTheme(darkTheme = dark) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot(startSignedIn = repo.isSignedIn)
+                CompositionLocalProvider(LocalAppLang provides lang) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        AppRoot(startSignedIn = repo.isSignedIn)
+                    }
                 }
             }
         }
@@ -119,9 +126,16 @@ fun MarketNavHost(startSignedIn: Boolean) {
             ProfileScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMyApps = { nav.navigate(Routes.MY_APPS) },
+                onOpenDownloads = { nav.navigate(Routes.DOWNLOADS) },
                 onSignedOut = {
                     nav.navigate(Routes.AUTH) { popUpTo(0) { inclusive = true } }
                 }
+            )
+        }
+        composable(Routes.DOWNLOADS) {
+            DownloadsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenApp = { nav.navigate(Routes.detail(it)) }
             )
         }
         composable(Routes.MY_APPS) {
