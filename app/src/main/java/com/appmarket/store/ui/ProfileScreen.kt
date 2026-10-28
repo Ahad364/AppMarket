@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -99,14 +99,13 @@ fun ProfileScreen(
             )
         }
 
-        // Change name
         MarketCard {
             Text(
                 tr("নাম পরিবর্তন", "Change name"),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             OutlinedTextField(
                 value = newName,
                 onValueChange = { newName = it },
@@ -126,7 +125,7 @@ fun ProfileScreen(
             }
             when (nameResult) {
                 NameResult.SAVED -> {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         tr("নাম সেভ হয়েছে", "Name saved"),
                         style = MaterialTheme.typography.bodySmall,
@@ -134,7 +133,7 @@ fun ProfileScreen(
                     )
                 }
                 NameResult.FAILED -> {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         tr("নাম সেভ করা যায়নি", "Could not save name"),
                         style = MaterialTheme.typography.bodySmall,
@@ -145,13 +144,7 @@ fun ProfileScreen(
             }
         }
 
-        // Account info
         MarketCard {
-            Text(
-                tr("অ্যাকাউন্ট", "Account"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Text(
                 "Email",
                 style = MaterialTheme.typography.bodySmall,
@@ -164,7 +157,6 @@ fun ProfileScreen(
             )
         }
 
-        // Dark mode
         MarketCard {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -180,14 +172,13 @@ fun ProfileScreen(
             }
         }
 
-        // Language
         MarketCard {
             Text(
                 tr("ভাষা", "Language"),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = lang == "bn",
@@ -202,7 +193,6 @@ fun ProfileScreen(
             }
         }
 
-        // About and version check
         MarketCard {
             Text(
                 tr("অ্যাপ সম্পর্কে", "About"),
@@ -222,11 +212,12 @@ fun ProfileScreen(
             OutlinedButton(
                 onClick = { vm.checkUpdate() },
                 enabled = update.status != UpdateStatus.CHECKING,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) { Text(tr("আপডেট চেক", "Check for update")) }
 
-            val message = when (update.status) {
+            val statusText = when (update.status) {
+                UpdateStatus.IDLE -> ""
                 UpdateStatus.CHECKING -> tr("চেক হচ্ছে…", "Checking…")
                 UpdateStatus.LATEST -> tr("আপনি সর্বশেষ ভার্সন ব্যবহার করছেন", "You are on the latest version")
                 UpdateStatus.AVAILABLE -> tr(
@@ -234,12 +225,11 @@ fun ProfileScreen(
                     "New version available: ${update.versionName}"
                 )
                 UpdateStatus.FAILED -> tr("আপডেট চেক করা যায়নি", "Could not check for updates")
-                UpdateStatus.IDLE -> ""
             }
-            if (message.isNotEmpty()) {
+            if (statusText.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    message,
+                    statusText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -255,8 +245,6 @@ fun ProfileScreen(
                 ) { Text(tr("নতুন ভার্সন ডাউনলোড", "Download update")) }
             }
         }
-
-        Spacer(Modifier.height(4.dp))
 
         OutlinedButton(
             onClick = onOpenMyApps,

@@ -27,11 +27,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
-class DownloadsViewModel @Inject constructor(repo: StoreRepository) : ViewModel() {
+class DownloadsViewModel @Inject constructor(
+    repo: StoreRepository
+) : ViewModel() {
     val downloads: StateFlow<List<DownloadRecord>> = repo.downloadsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
@@ -62,7 +65,9 @@ fun DownloadsScreen(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(list, key = { it.appId }) { item ->
-                    MarketCard(modifier = Modifier.fillMaxWidth().clickable { onOpenApp(item.appId) }) {
+                    MarketCard(
+                        modifier = Modifier.fillMaxWidth().clickable { onOpenApp(item.appId) }
+                    ) {
                         Text(
                             item.name,
                             style = MaterialTheme.typography.titleMedium,
@@ -86,6 +91,6 @@ fun DownloadsScreen(
 }
 
 private fun formatDownloadDate(millis: Long): String {
-    if (millis <= 0L) return "—"
-    return SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.US).format(millis)
+    if (millis <= 0L) return ""
+    return SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.US).format(Date(millis))
 }
