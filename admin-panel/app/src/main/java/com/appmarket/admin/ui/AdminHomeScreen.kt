@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -48,6 +54,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -109,32 +118,39 @@ fun AdminHomeScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.linearGradient(
+                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                    )
+                )
+                .padding(start = 18.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "অ্যাডমিন প্যানেল",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = Color.White
                 )
                 Text(
-                    "AppMarket",
+                    "AppMarket · ব্যবস্থাপনা",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.85f)
                 )
             }
             IconButton(onClick = vm::refresh) {
-                Icon(
-                    Icons.Filled.Refresh,
-                    contentDescription = "Refresh",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = Color.White)
             }
             TextButton(onClick = vm::signOut) {
-                Text("লগ আউট", color = MaterialTheme.colorScheme.error)
+                Text("লগ আউট", color = Color.White, style = MaterialTheme.typography.labelLarge)
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             StatCard("ব্যবহারকারী", state.users.size, Modifier.weight(1f))
@@ -145,19 +161,24 @@ fun AdminHomeScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
+        TabRow(
+            selectedTabIndex = state.tab,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
+        ) {
+            Tab(
                 selected = state.tab == 0,
                 onClick = { vm.selectTab(0) },
-                label = { Text("ব্যবহারকারী") }
+                text = { Text("ব্যবহারকারী", style = MaterialTheme.typography.labelLarge) }
             )
-            FilterChip(
+            Tab(
                 selected = state.tab == 1,
                 onClick = { vm.selectTab(1) },
-                label = { Text("অ্যাপ") }
+                text = { Text("অ্যাপ", style = MaterialTheme.typography.labelLarge) }
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
@@ -628,6 +649,7 @@ private fun StatCard(label: String, value: Int, modifier: Modifier) {
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary
         )
+        Spacer(Modifier.height(2.dp))
         Text(
             label,
             style = MaterialTheme.typography.bodySmall,
@@ -638,18 +660,53 @@ private fun StatCard(label: String, value: Int, modifier: Modifier) {
 
 @Composable
 private fun EmptyText(text: String) {
-    Text(
-        text,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.bodyMedium
-    )
+    AdminCard {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun StatusPill(text: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = 10.dp, vertical = 3.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+@Composable
+private fun InitialAvatar(text: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text.firstOrNull()?.uppercase() ?: "?",
+            style = MaterialTheme.typography.titleMedium,
+            color = color
+        )
+    }
 }
 
 @Composable
 private fun UserRow(user: AdminUser, isSelf: Boolean, onToggleBan: () -> Unit) {
+    val statusColor = if (user.banned) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     AdminCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
+            InitialAvatar(text = user.name.ifBlank { "?" }, color = statusColor)
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(
                     user.name.ifBlank { "নামহীন" },
                     style = MaterialTheme.typography.titleSmall,
@@ -660,19 +717,14 @@ private fun UserRow(user: AdminUser, isSelf: Boolean, onToggleBan: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
+                Spacer(Modifier.height(6.dp))
+                StatusPill(
                     if (user.banned) "নিষিদ্ধ" else "সক্রিয়",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (user.banned) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    statusColor
                 )
             }
             if (isSelf) {
-                Text(
-                    "আপনি",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                StatusPill("আপনি", MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 OutlinedButton(onClick = onToggleBan, shape = RoundedCornerShape(12.dp)) {
                     Text(
@@ -699,7 +751,7 @@ private fun AppRow(
 ) {
     AdminCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AppIconBox(url = app.iconUrl, size = 48.dp)
+            AppIconBox(url = app.iconUrl, size = 52.dp)
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(
                     app.name,
@@ -707,19 +759,32 @@ private fun AppRow(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "${app.packageName} · v${app.versionName} (${app.versionCode})",
+                    app.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+                Text(
+                    "v${app.versionName} (${app.versionCode})",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    if (app.approved) "দৃশ্যমান" else "লুকানো",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (app.approved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StatusPill(
+                        if (app.approved) "দৃশ্যমান" else "লুকানো",
+                        if (app.approved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (featured) {
+                        StatusPill("★ ফিচার্ড", MaterialTheme.colorScheme.tertiary)
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+
+        Spacer(Modifier.height(14.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = onEdit,
                 modifier = Modifier.weight(1f),
@@ -744,8 +809,8 @@ private fun AppRow(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = onToggleFeatured,
                 modifier = Modifier.weight(1f),
@@ -756,15 +821,14 @@ private fun AppRow(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
-        }
-        Spacer(Modifier.height(6.dp))
-        OutlinedButton(
-            onClick = onUploadApk,
-            enabled = !uploading,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("APK আপলোড", style = MaterialTheme.typography.labelLarge)
+            Button(
+                onClick = onUploadApk,
+                enabled = !uploading,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("APK আপলোড", style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
